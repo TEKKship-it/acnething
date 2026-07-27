@@ -1,4 +1,4 @@
-var CACHE = "skinlog-v2";
+var CACHE = "skinlog-v3";
 var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function (e) {
@@ -12,16 +12,28 @@ self.addEventListener("activate", function (e) {
   }).then(function () { return self.clients.claim(); }));
 });
 
-// cache-first: the app must open with no signal at all
 self.addEventListener("fetch", function (e) {
-  if (e.request.method !== "GET") return;
+  var req = e.request;
+  if (req.method !== "GET") return;
+
+  var url = new URL(req.url);
+
+  // never cache the AI reader endpoint — it must always hit the network
+  if (url.origin !== self.location.origin && !/jsdelivr|unpkg|tessdata/.test(url.hostname + url.pathname)) return;
+
   e.respondWith(
-    caches.match(e.request).then(function (hit) {
-      return hit || fetch(e.request).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+    caches.match(req).then(function (hit) {
+      if (hit) return hit;
+      return fetch(req).then(function (res) {
+        // cache the OCR engine + language data so scanning works offline after the first use
+        if (res && (res.ok || res.type === "opaque")) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put(req, copy); });
+        }
         return res;
-      }).catch(function () { return caches.match("./index.html"); });
+      }).catch(function () {
+        return url.origin === self.location.origin ? caches.match("./index.html") : Response.error();
+      });
     })
   );
 });

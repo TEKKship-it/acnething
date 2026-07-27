@@ -134,6 +134,8 @@
     padding: 14px; margin: 14px 0 0; }
   .warnt { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
     letter-spacing: .12em; text-transform: uppercase; color: var(--flare); }
+  .ocr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+    color: var(--mark); min-height: 16px; margin-top: 10px; line-height: 1.5; }
   .warnb { font-size: 13px; color: var(--paper-dim); line-height: 1.5; margin: 6px 0 4px; }
 
   .nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; gap: 4px;
@@ -166,7 +168,7 @@
 <script>
 (function () {
   var KEY = "skinlog:v2";
-  var state = { days: {}, custom: [], foods: [], routine: { am:"", pm:"", notes:"" }, backedUp: null };
+  var state = { days: {}, custom: [], foods: [], routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
   var view = "today", sel = todayStr(), lag = 1, measure = "nw", sheet = null, saveTimer = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
@@ -268,7 +270,8 @@
       if (raw) { try { var v = JSON.parse(raw);
         state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || [];
         state.routine = v.routine || { am:"", pm:"", notes:"" };
-        state.backedUp = v.backedUp || null; } catch (e) {} }
+        state.backedUp = v.backedUp || null;
+        state.reader = v.reader || ""; } catch (e) {} }
       render();
     }).catch(render);
   }
@@ -514,11 +517,16 @@
         + '<button class="btn" data-close="1">Cancel</button>';
     } else {
       h += '<h2 class="sec">Add a food</h2>'
-        + '<div class="sub">Point your camera at the ingredient list, tap the text-select icon, copy, '
-        + 'and paste it below. The groups fill in automatically — correct anything it gets wrong.</div>'
+        + '<div class="sub">Photograph the ingredient list, or paste it in. Get the packet flat, fill '
+        + 'the frame with the small print, and keep your shadow off it.</div>'
         + '<input type="text" id="fname" value="'+esc(data.name||"")+'" placeholder="Name it — e.g. protein bar">'
-        + '<div style="height:8px"></div>'
-        + '<textarea id="fing" placeholder="Paste the ingredient list here (optional)">'+esc(data.raw||"")+'</textarea>'
+        + '<input type="file" accept="image/*" capture="environment" id="cam" style="display:none">'
+        + '<input type="file" accept="image/*" id="lib" style="display:none">'
+        + '<button class="btn go" data-cam="1">Scan with camera</button>'
+        + '<button class="btn" data-lib="1">Choose a photo</button>'
+        + '<div id="ocr" class="ocr"></div>'
+        + '<div class="grph" style="margin-top:18px">Ingredients</div>'
+        + '<textarea id="fing" placeholder="Scanned text lands here — fix anything mangled, then read it">'+esc(data.raw||"")+'</textarea>'
         + '<button class="btn" data-parse="1">Read the ingredients</button>'
         + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
       FLAGS.forEach(function (fl) {
@@ -535,6 +543,129 @@
     var n = document.getElementById("fname"), g = document.getElementById("fing");
     if (n) draft.name = n.value;
     if (g) draft.raw = g.value;
+  }
+
+  // ---------- reading a label ----------
+  function ocrStatus(msg) {
+    var el = document.getElementById("ocr");
+    if (el) el.textContent = msg || "";
+  }
+
+  function pickImage(useCamera) {
+    var inp = document.getElementById(useCamera ? "cam" : "lib");
+    if (!inp) return;
+    inp.onchange = function () {
+      var file = inp.files && inp.files[0];
+      if (!file) return;
+      grabDraft();
+      prepImage(file, function (canvas, dataUrl) {
+        if (!canvas) return ocrStatus("That image didn't load. Try again.");
+        if (state.reader) readViaAI(dataUrl); else readViaOCR(canvas);
+      });
+    };
+    inp.click();
+  }
+
+  // downscale, greyscale, stretch contrast — small print needs the help
+  function prepImage(file, cb) {
+    var r = new FileReader();
+    r.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1800, w = img.width, h = img.height;
+        if (Math.max(w, h) > max) { var k = max / Math.max(w, h); w = Math.round(w*k); h = Math.round(h*k); }
+        var c = document.createElement("canvas"); c.width = w; c.height = h;
+        var ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          var d = ctx.getImageData(0, 0, w, h), p = d.data, i, lo = 255, hi = 0, g;
+          for (i = 0; i < p.length; i += 4) {
+            g = (p[i]*0.299 + p[i+1]*0.587 + p[i+2]*0.114) | 0;
+            p[i] = p[i+1] = p[i+2] = g;
+            if (g < lo) lo = g; if (g > hi) hi = g;
+          }
+          var span = Math.max(1, hi - lo);
+          for (i = 0; i < p.length; i += 4) {
+            g = ((p[i] - lo) / span) * 255;
+            g = g < 0 ? 0 : g > 255 ? 255 : g;
+            p[i] = p[i+1] = p[i+2] = g;
+          }
+          ctx.putImageData(d, 0, 0);
+        } catch (e) {}
+        cb(c, c.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = function () { cb(null); };
+      img.src = r.result;
+    };
+    r.onerror = function () { cb(null); };
+    r.readAsDataURL(file);
+  }
+
+  var tessLoading = null;
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve();
+    if (tessLoading) return tessLoading;
+    tessLoading = new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.onload = res;
+      s.onerror = function () { tessLoading = null; rej(new Error("load")); };
+      document.head.appendChild(s);
+    });
+    return tessLoading;
+  }
+
+  function readViaOCR(canvas) {
+    ocrStatus("Loading the reader… first time needs a connection.");
+    loadTesseract().then(function () {
+      ocrStatus("Reading…");
+      return Tesseract.createWorker(["eng", "swe"], 1, {
+        logger: function (m) {
+          if (m.status === "recognizing text") ocrStatus("Reading… " + Math.round(m.progress * 100) + "%");
+          else if (/loading|initializ/i.test(m.status)) ocrStatus("Loading the reader…");
+        }
+      });
+    }).then(function (worker) {
+      return worker.recognize(canvas).then(function (res) {
+        return worker.terminate().then(function () { return res.data.text; });
+      });
+    }).then(function (text) {
+      applyScan(text);
+    }).catch(function () {
+      ocrStatus("Couldn't read that. Try a closer, flatter shot — or type the ingredients in below.");
+    });
+  }
+
+  function readViaAI(dataUrl) {
+    ocrStatus("Reading…");
+    fetch(state.reader, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: dataUrl.split(",")[1], flags: FLAGS })
+    }).then(function (r) { return r.json(); }).then(function (out) {
+      if (out.error) return ocrStatus(out.error);
+      if (out.name && !draft.name) draft.name = out.name;
+      draft.raw = (out.ingredients || []).join(", ");
+      draft.ingredients = out.ingredients || [];
+      draft.flags = (out.flags || []).filter(function (f) { return FLAGS.indexOf(f) >= 0; });
+      openSheet("food", draft);
+    }).catch(function () {
+      ocrStatus("Couldn't reach your reader. Check the URL in Log → Settings.");
+    });
+  }
+
+  function applyScan(text) {
+    var clean = String(text || "")
+      .replace(/[|]/g, "I")
+      .replace(/\s*\n\s*/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!clean) return ocrStatus("Nothing readable in that shot. Try again closer.");
+    draft.raw = clean;
+    var r = parseIngredients(clean);
+    draft.flags = r.flags;
+    draft.ingredients = r.parts;
+    openSheet("food", draft);
   }
 
   function vPatterns() {
@@ -640,6 +771,12 @@
        + '<div class="rowmeta" style="margin-top:10px">Stored on this phone only — never in the app\'s '
        + 'code, so hosting it publicly gives nothing away.</div></div>';
 
+    h += '<div class="grp"><div class="grph">Label reader</div>'
+       + '<div class="rowmeta" style="margin-bottom:8px">'
+       + (state.reader ? 'Using your own AI reader.' : 'Using on-device text recognition — free, works offline, occasionally garbles small print.')
+       + '</div><button class="btn" data-reader="1">'
+       + (state.reader ? 'Change reader URL' : 'Use an AI reader instead') + '</button></div>';
+
     var db = daysSinceBackup();
     h += '<div class="grp"><div class="grph">Backup</div>'
        + '<button class="btn go" data-share="1">Save a backup</button>'
@@ -712,6 +849,8 @@
         sheet = null; save(); return render();
       }
       if (d.newfood) { draft = {name:"",flags:[],ingredients:[],raw:""}; return openSheet("food"); }
+      if (d.cam) return pickImage(true);
+      if (d.lib) return pickImage(false);
       if (d.parse) {
         grabDraft();
         var r = parseIngredients(draft.raw);
@@ -767,6 +906,13 @@
         }
         return;
       }
+      if (d.reader) {
+        var url = prompt("Paste your reader endpoint URL. Leave blank to go back to on-device reading.", state.reader || "");
+        if (url === null) return;
+        url = url.trim();
+        if (url && !/^https:\/\//.test(url)) { alert("That needs to be an https:// URL."); return; }
+        state.reader = url; save(); return render();
+      }
       if (d.share) return shareBackup();
       if (d.copy) return copyOut(csv(), t, "Copy as CSV");
       if (d.backup) return copyOut(JSON.stringify(state), t, "Copy backup (JSON)");
@@ -779,6 +925,7 @@
           state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || [];
           state.routine = v.routine || { am:"", pm:"", notes:"" };
           state.backedUp = v.backedUp || null;
+          state.reader = v.reader || "";
           save(); render();
         } catch (e) { alert("That didn't look like a backup from this app. Nothing was changed."); }
         return;
