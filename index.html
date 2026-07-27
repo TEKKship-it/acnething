@@ -130,6 +130,11 @@
   .note { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
     padding: 14px; font-size: 13px; color: var(--paper-dim); line-height: 1.5; }
   .note b { color: var(--paper); font-weight: 600; }
+  .warn { background: var(--ink-2); border: 1px solid var(--flare); border-radius: 14px;
+    padding: 14px; margin: 14px 0 0; }
+  .warnt { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--flare); }
+  .warnb { font-size: 13px; color: var(--paper-dim); line-height: 1.5; margin: 6px 0 4px; }
 
   .nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; gap: 4px;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
@@ -161,7 +166,7 @@
 <script>
 (function () {
   var KEY = "skinlog:v2";
-  var state = { days: {}, custom: [], foods: [] };
+  var state = { days: {}, custom: [], foods: [], routine: { am:"", pm:"", notes:"" }, backedUp: null };
   var view = "today", sel = todayStr(), lag = 1, measure = "nw", sheet = null, saveTimer = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
@@ -231,15 +236,6 @@
   }
 
   var LASER = "Laser session (face)";
-  var ROUTINE = {
-    Morning: ["Cleanse — LRP Toleriane Foaming Gel Double Cleanser",
-              "Moisturise — LRP Toleriane Dermallergo Crème",
-              "SPF — LRP Anthelios UVMune 400 Ultra Light Fluid SPF 50+"],
-    Night:   ["Cleanse — LRP Effaclar Micro-Peel Gel",
-              "Active — Medik8 Crystal Retinal 20",
-              "Moisturise — LRP Cicaplast Baume B5+"],
-    "Paused for laser": ["Retinal stops around each session — tag those days as Off retinal"]
-  };
 
   var GROUPS = [
     { name: "Ate & drank", tags: ["Milk","Cheese","Yogurt","Whey protein","Chocolate","Sweets / sugar",
@@ -270,7 +266,9 @@
   function load() {
     store.get().then(function (raw) {
       if (raw) { try { var v = JSON.parse(raw);
-        state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || []; } catch (e) {} }
+        state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || [];
+        state.routine = v.routine || { am:"", pm:"", notes:"" };
+        state.backedUp = v.backedUp || null; } catch (e) {} }
       render();
     }).catch(render);
   }
@@ -325,10 +323,54 @@
     return out;
   }
 
+  function daysLogged() { return Object.keys(state.days).length; }
+  function daysSinceBackup() {
+    if (!state.backedUp) return null;
+    return Math.floor((Date.now() - state.backedUp) / 86400000);
+  }
+  function backupOverdue() {
+    if (daysLogged() < 5) return false;
+    var d = daysSinceBackup();
+    return d === null || d >= 14;
+  }
+  function markBackedUp() { state.backedUp = Date.now(); save(); render(); }
+
+  function shareBackup() {
+    var text = JSON.stringify(state);
+    var name = "skinlog-" + todayStr() + ".json";
+    if (navigator.canShare) {
+      try {
+        var file = new File([text], name, { type: "application/json" });
+        if (navigator.canShare({ files: [file] })) {
+          return navigator.share({ files: [file], title: "Skin Log backup" })
+            .then(markBackedUp).catch(function () {});
+        }
+      } catch (e) {}
+    }
+    if (navigator.share) {
+      return navigator.share({ title: "Skin Log backup", text: text })
+        .then(markBackedUp).catch(function () {});
+    }
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    markBackedUp();
+  }
+
+  function banner() {
+    if (!backupOverdue()) return "";
+    var d = daysSinceBackup();
+    return '<div class="wrap"><div class="warn">'
+      + '<div class="warnt">'+(d===null ? "Never backed up" : "Last backup "+d+" days ago")+'</div>'
+      + '<div class="warnb">'+daysLogged()+' days of logging live only on this phone. '
+      + 'Deleting the app or clearing Safari data would take them with it.</div>'
+      + '<button class="btn go" data-share="1">Save a backup</button></div></div>';
+  }
+
   function render() {
     var html = view==="today" ? vToday() : view==="foods" ? vFoods()
              : view==="patterns" ? vPatterns() : vLog();
-    document.getElementById("app").innerHTML = html + nav() + (sheet||"");
+    document.getElementById("app").innerHTML = banner() + html + nav() + (sheet||"");
     bind();
     if (view==="today") { var s = document.querySelector(".day.sel"); if (s) s.scrollIntoView({block:"nearest",inline:"center"}); }
   }
@@ -457,6 +499,19 @@
         + 'cleansing. <b>Stinging</b>: burns on application, or blotchy redness across whole areas. '
         + '<b>Raw</b>: sore to touch, peeling, you\'d skip the retinal tonight.</div></div>'
         + '<button class="btn go" data-close="1">Got it</button>';
+    } else if (stage === "routine") {
+      var r = state.routine || {};
+      h += '<h2 class="sec">Standing routine</h2>'
+        + '<div class="sub">What you do most days. One step per line. This stays on your phone — '
+        + 'it is not part of the app\'s code.</div>'
+        + '<div class="grph">Morning</div>'
+        + '<textarea id="ram" placeholder="Cleanser&#10;Moisturiser&#10;SPF">'+esc(r.am||"")+'</textarea>'
+        + '<div class="grph" style="margin-top:16px">Night</div>'
+        + '<textarea id="rpm" placeholder="Cleanser&#10;Active&#10;Moisturiser">'+esc(r.pm||"")+'</textarea>'
+        + '<div class="grph" style="margin-top:16px">Notes</div>'
+        + '<textarea id="rno" placeholder="Anything that interrupts it — treatments, breaks">'+esc(r.notes||"")+'</textarea>'
+        + '<button class="btn go" data-saveroutine="1">Save</button>'
+        + '<button class="btn" data-close="1">Cancel</button>';
     } else {
       h += '<h2 class="sec">Add a food</h2>'
         + '<div class="sub">Point your camera at the ingredient list, tap the text-select icon, copy, '
@@ -566,20 +621,34 @@
     var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Your log</h2>'
       + '<div class="sub">'+days.length+' '+(days.length===1?"day":"days")+' recorded · '
       + state.foods.length+' saved foods.</div>';
+    var r = state.routine || {};
     h += '<div class="grp"><div class="grph">Standing routine</div>';
-    Object.keys(ROUTINE).forEach(function (k) {
-      h += '<div class="rowmeta" style="margin:10px 0 4px">'+k.toUpperCase()+'</div>';
-      ROUTINE[k].forEach(function (s) { h += '<div style="font-size:13.5px;padding:3px 0">'+esc(s)+'</div>'; });
-    });
-    h += '<div class="note" style="margin-top:12px">Identical most days, so these aren\'t tags — '
-       + 'a constant can\'t explain a change. Tag the <b>days you deviate</b> instead.</div></div>';
+    if (!r.am && !r.pm && !r.notes) {
+      h += '<div class="note">Not set. Write down what you do every day — it never gets tagged, '
+         + 'because a constant can\'t explain a change, but it\'s worth having on the record so you '
+         + 'know what your baseline was months from now.</div>';
+    } else {
+      [["Morning", r.am], ["Night", r.pm], ["Notes", r.notes]].forEach(function (p) {
+        if (!p[1]) return;
+        h += '<div class="rowmeta" style="margin:10px 0 4px">'+p[0].toUpperCase()+'</div>';
+        p[1].split("\n").forEach(function (s) {
+          if (s.trim()) h += '<div style="font-size:13.5px;padding:3px 0">'+esc(s.trim())+'</div>';
+        });
+      });
+    }
+    h += '<button class="btn" data-routine="1">'+(r.am||r.pm?"Edit routine":"Add your routine")+'</button>'
+       + '<div class="rowmeta" style="margin-top:10px">Stored on this phone only — never in the app\'s '
+       + 'code, so hosting it publicly gives nothing away.</div></div>';
 
+    var db = daysSinceBackup();
     h += '<div class="grp"><div class="grph">Backup</div>'
+       + '<button class="btn go" data-share="1">Save a backup</button>'
        + '<button class="btn" data-copy="1">Copy as CSV</button>'
-       + '<button class="btn" data-backup="1">Copy backup (JSON)</button>'
        + '<button class="btn" data-restore="1">Restore from backup</button>'
-       + '<div class="rowmeta" style="margin-top:10px">Your log lives only on this phone. '
-       + 'Paste a JSON backup into a note now and then — clearing Safari data would wipe it.</div></div>';
+       + '<div class="rowmeta" style="margin-top:10px">'
+       + (db === null ? "Never backed up." : db === 0 ? "Backed up today." : "Last backup "+db+" day"+(db===1?"":"s")+" ago.")
+       + ' Your log lives only on this phone — send a backup to Files or Notes every couple of weeks.'
+       + '</div></div>';
 
     h += '<div class="grp"><div class="grph">Entries</div>';
     if (!days.length) h += '<div class="note">Nothing yet. Head to Today.</div>';
@@ -636,6 +705,12 @@
 
       if (d.close) return closeSheet();
       if (d.help) return openSheet("help");
+      if (d.routine) return openSheet("routine");
+      if (d.saveroutine) {
+        var am = document.getElementById("ram"), pm = document.getElementById("rpm"), no = document.getElementById("rno");
+        state.routine = { am: am?am.value.trim():"", pm: pm?pm.value.trim():"", notes: no?no.value.trim():"" };
+        sheet = null; save(); return render();
+      }
       if (d.newfood) { draft = {name:"",flags:[],ingredients:[],raw:""}; return openSheet("food"); }
       if (d.parse) {
         grabDraft();
@@ -692,6 +767,7 @@
         }
         return;
       }
+      if (d.share) return shareBackup();
       if (d.copy) return copyOut(csv(), t, "Copy as CSV");
       if (d.backup) return copyOut(JSON.stringify(state), t, "Copy backup (JSON)");
       if (d.restore) {
@@ -701,6 +777,8 @@
           var v = JSON.parse(raw);
           if (!v || typeof v !== "object" || !v.days) throw new Error("shape");
           state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || [];
+          state.routine = v.routine || { am:"", pm:"", notes:"" };
+          state.backedUp = v.backedUp || null;
           save(); render();
         } catch (e) { alert("That didn't look like a backup from this app. Nothing was changed."); }
         return;
