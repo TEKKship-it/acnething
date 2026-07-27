@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Skin Log</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Skin Log">
+<meta name="theme-color" content="#12162A">
+<style>
+  :root {
+    --ink: #12162A; --ink-2: #1B2140; --ink-3: #262E52; --line: #333C68;
+    --paper: #ECEAF4; --paper-dim: #9AA0C4; --faint: #5B639A;
+    --flare: #E4737E; --calm: #4FBFA8; --mark: #E8B84B;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--ink); }
+  body { color: var(--paper);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.45; min-height: 100vh;
+    padding: env(safe-area-inset-top) 0 100px; -webkit-text-size-adjust: 100%; }
+  .boot { padding: 80px 20px; text-align: center; color: var(--paper-dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px;
+    letter-spacing: .08em; text-transform: uppercase; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+
+  .strip-shell { position: sticky; top: 0; z-index: 20;
+    background: linear-gradient(var(--ink) 78%, rgba(18,22,42,0)); padding: 14px 0 18px; }
+  .strip { display: flex; align-items: flex-end; gap: 3px; overflow-x: auto; padding: 0 16px 6px; }
+  .strip::-webkit-scrollbar { display: none; }
+  .day { flex: 0 0 auto; width: 26px; display: flex; flex-direction: column; align-items: center;
+    gap: 5px; background: none; border: 0; padding: 0; cursor: pointer;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .bar-slot { height: 58px; width: 100%; display: flex; flex-direction: column;
+    justify-content: flex-end; align-items: center; }
+  .seg { width: 12px; }
+  .seg.dp { background: var(--flare); border-radius: 3px 3px 0 0; }
+  .seg.inf { background: #C9707F; }
+  .seg.co { background: #6E6FA8; border-radius: 0 0 1px 1px; }
+  .seg.none { background: var(--ink-3); height: 3px; border-radius: 2px; }
+  .seg.zero { background: var(--calm); height: 4px; border-radius: 2px; }
+  .day.sel .bar-slot { outline: 2px solid var(--paper); outline-offset: 2px; border-radius: 4px; }
+  .dnum { font-size: 10px; color: var(--paper-dim); }
+  .day.sel .dnum { color: var(--paper); }
+  .dow { font-size: 8px; color: var(--faint); text-transform: uppercase; }
+
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 16px; }
+  .date { font-family: ui-serif, "New York", Georgia, serif; font-size: 26px; font-weight: 500; }
+  .saved { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--calm); opacity: 0; transition: opacity .3s; }
+  .saved.on { opacity: 1; }
+
+  .total { background: var(--ink-2); border: 1px solid var(--line); border-radius: 16px 16px 0 0;
+    border-bottom: 0; padding: 14px 16px 12px; display: flex; align-items: baseline; gap: 12px; }
+  .cnum { font-family: ui-serif, "New York", Georgia, serif; font-size: 42px; line-height: 1;
+    font-weight: 500; font-variant-numeric: tabular-nums; }
+  .clab { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--paper-dim); }
+  .types { background: var(--ink-2); border: 1px solid var(--line); border-radius: 0 0 16px 16px;
+    padding: 4px 16px 12px; margin-bottom: 22px; }
+  .trow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+  .tdot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+  .tname { flex: 1; font-size: 13.5px; line-height: 1.25; }
+  .thint { display: block; font-size: 11px; color: var(--faint); }
+  .tval { font-family: ui-serif, "New York", Georgia, serif; font-size: 20px;
+    font-variant-numeric: tabular-nums; min-width: 26px; text-align: center; }
+  .mini { width: 38px; height: 38px; border-radius: 11px; background: var(--ink-3);
+    border: 1px solid var(--line); color: var(--paper); font-size: 19px; line-height: 1; cursor: pointer; }
+  .mini:active { background: var(--line); }
+  .trow.newrow { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 11px; }
+  .helplink { display: block; width: 100%; margin-top: 8px; padding: 8px 0; background: none;
+    border: 0; color: var(--paper-dim); cursor: pointer; text-align: left;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase; text-decoration: underline; }
+
+  .sev { display: flex; gap: 6px; }
+  .sevb { flex: 1; padding: 9px 0; border-radius: 11px; background: var(--ink-2);
+    border: 1px solid var(--line); color: var(--paper-dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+  .sevb.on { background: var(--mark); border-color: var(--mark); color: #2A2208; font-weight: 600; }
+
+  .grp { margin-bottom: 22px; }
+  .grph { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--paper-dim);
+    margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .grph::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .tags { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tag { padding: 9px 13px; border-radius: 999px; background: var(--ink-2);
+    border: 1px solid var(--line); color: var(--paper); font-size: 13.5px; cursor: pointer; }
+  .tag.on { background: var(--paper); border-color: var(--paper); color: var(--ink); }
+  .tag.add { border-style: dashed; color: var(--paper-dim); }
+  .tag.scan { border-color: var(--mark); color: var(--mark); }
+
+  textarea, input[type=text] { width: 100%; background: var(--ink-2); border: 1px solid var(--line);
+    border-radius: 14px; color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; }
+  textarea { min-height: 76px; resize: vertical; }
+  textarea::placeholder, input::placeholder { color: var(--faint); }
+  :focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+  .chips { display: flex; gap: 6px; margin: 4px 0 18px; flex-wrap: wrap; }
+  .chip { flex: 1 1 auto; min-width: 70px; padding: 10px 8px; border-radius: 12px;
+    background: var(--ink-2); border: 1px solid var(--line); color: var(--paper-dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10.5px; cursor: pointer; }
+  .chip.on { background: var(--ink-3); border-color: var(--paper); color: var(--paper); }
+
+  .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+    padding: 11px 0; border-bottom: 1px solid var(--ink-3); }
+  .rowname { font-size: 14.5px; }
+  .rowmeta { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    color: var(--paper-dim); letter-spacing: .04em; margin-top: 3px; line-height: 1.5; }
+  .delta { font-family: ui-serif, "New York", Georgia, serif; font-size: 19px;
+    font-variant-numeric: tabular-nums; text-align: right; }
+  .up { color: var(--flare); } .down { color: var(--calm); }
+  .kind { display: inline-block; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 8.5px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px;
+    border-radius: 5px; border: 1px solid var(--line); color: var(--paper-dim); margin-right: 7px; }
+  .kind.ing { border-color: var(--mark); color: var(--mark); }
+
+  .lwrap { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin: 6px 0 8px; }
+  .lcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .lbar { width: 100%; background: var(--ink-3); border-radius: 3px 3px 0 0; min-height: 2px; }
+  .lbar.hot { background: var(--flare); }
+  .lday { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 8px; color: var(--faint); }
+
+  .note { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; font-size: 13px; color: var(--paper-dim); line-height: 1.5; }
+  .note b { color: var(--paper); font-weight: 600; }
+
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; gap: 4px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    background: rgba(18,22,42,.93); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line); }
+  .nav button { flex: 1; padding: 12px 0; border-radius: 13px; border: 1px solid transparent;
+    background: none; color: var(--paper-dim); cursor: pointer;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase; }
+  .nav button.on { background: var(--ink-3); border-color: var(--line); color: var(--paper); }
+
+  h2.sec { font-family: ui-serif, "New York", Georgia, serif; font-size: 21px; font-weight: 500; margin: 0 0 4px; }
+  .sub { color: var(--paper-dim); font-size: 13px; margin-bottom: 18px; }
+
+  .sheet { position: fixed; inset: 0; z-index: 50; background: rgba(9,11,22,.82); display: flex; align-items: flex-end; }
+  .sheet-in { background: var(--ink-2); border-top: 1px solid var(--line); border-radius: 20px 20px 0 0;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); width: 100%; max-height: 88vh;
+    overflow-y: auto; max-width: 560px; margin: 0 auto; }
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--ink-3); color: var(--paper); font: inherit; font-size: 15px; cursor: pointer; margin-top: 8px; }
+  .btn.go { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"><div class="boot">Opening your log…</div></div>
+
+<script>
+(function () {
+  var KEY = "skinlog:v2";
+  var state = { days: {}, custom: [], foods: [] };
+  var view = "today", sel = todayStr(), lag = 1, measure = "nw", sheet = null, saveTimer = null;
+
+  // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
+  var store = {
+    get: function () {
+      if (window.storage) return window.storage.get(KEY).then(function (r) { return r && r.value; });
+      try { return Promise.resolve(localStorage.getItem(KEY)); }
+      catch (e) { return Promise.resolve(null); }
+    },
+    set: function (v) {
+      if (window.storage) return window.storage.set(KEY, v);
+      try { localStorage.setItem(KEY, v); } catch (e) {}
+      return Promise.resolve();
+    }
+  };
+
+  var TYPES = [
+    { k: "co",  name: "Clogged",  hint: "no redness, no pain — skip the nose", col: "#6E6FA8" },
+    { k: "inf", name: "Inflamed", hint: "red, near the surface, head or not", col: "#C9707F" },
+    { k: "dp",  name: "Deep",     hint: "firm lump underneath, hurts to press", col: "#E4737E" }
+  ];
+  var MEASURES = [["nw","New today"],["all","All spots"],["co","Clogged"],["inf","Inflamed"],["dp","Deep"]];
+  var ZONES = ["Forehead","Temples","Nose","Cheeks","Jaw / chin","Around mouth","Neck","Chest / back"];
+
+  var FLAGS = ["Dairy","Whey / casein","Egg","Soy","Gluten / wheat","Added sugar","High sugar",
+    "Artificial sweetener","Cocoa / chocolate","Nuts","Seed oils","Palm oil","Fried / high fat",
+    "Caffeine","Alcohol","Iodine-rich","Additives / preservatives","Spicy","Fermented",
+    "Red meat","Fish / seafood","Whole grain","Fruit / veg","Highly processed"];
+
+  // offline ingredient matcher — no network, no API key
+  var RULES = [
+    ["Dairy", /milk|lactose|whey|casein|cream|butter(?!nut)|cheese|yogh?urt|yoghurt|buttermilk|ghee|kvarg|kesella|grädde|smör|ost/i],
+    ["Whey / casein", /whey|casein|vassle/i],
+    ["Egg", /\begg|albumen|ägg/i],
+    ["Soy", /soy|soya|soja/i],
+    ["Gluten / wheat", /wheat|gluten|barley|rye|semolina|spelt|durum|vete|korn|råg/i],
+    ["Added sugar", /sugar|syrup|dextrose|fructose|glucose|maltodextrin|honey|molasses|invert|sucrose|maltose|socker|sirap|honung/i],
+    ["Artificial sweetener", /aspartame|sucralose|acesulfame|saccharin|stevia|steviol|sorbitol|xylitol|maltitol|erythritol|sötningsmedel/i],
+    ["Cocoa / chocolate", /cocoa|cacao|chocolate|kakao|choklad/i],
+    ["Nuts", /almond|hazelnut|peanut|cashew|walnut|pistachio|pecan|\bnuts?\b|mandel|jordnöt|nöt/i],
+    ["Seed oils", /sunflower oil|rapeseed|canola|soybean oil|corn oil|safflower|seed oil|solros|raps/i],
+    ["Palm oil", /palm oil|palm fat|palm kernel|palmolja|palmfett/i],
+    ["Fried / high fat", /fried|deep-?fried|shortening|friterad|stekt/i],
+    ["Caffeine", /caffeine|coffee|guarana|green tea extract|koffein|kaffe/i],
+    ["Alcohol", /\bethanol|\bbeer\b|\bwine\b|\bvodka|\brum\b|liqueur|alkohol/i],
+    ["Iodine-rich", /seaweed|kelp|nori|iodi[sz]ed|jodid|tång/i],
+    ["Additives / preservatives", /\bE\d{3}|preservative|stabili[sz]er|emulsifier|flavou?ring|anti-?caking|colou?r \(|konserverings|stabiliserings|emulgering|arom/i],
+    ["Spicy", /chill?i|cayenne|jalapeno|sriracha|harissa|capsic|stark/i],
+    ["Fermented", /fermented|kimchi|miso|kefir|sourdough|kombucha|fermenterad|surdeg/i],
+    ["Red meat", /beef|pork|lamb|bacon|\bham\b|salami|veal|mince|nötkött|fläsk/i],
+    ["Fish / seafood", /salmon|tuna|\bcod\b|shrimp|prawn|\bfish\b|anchov|sardine|mackerel|lax|räk|fisk/i],
+    ["Whole grain", /wholegrain|whole ?grain|wholemeal|\boats?\b|brown rice|quinoa|fullkorn|havre/i],
+    ["Fruit / veg", /apple|banana|berr|tomato|carrot|spinach|broccoli|orange|mango|lentil|\bbeans?\b|äpple|tomat|morot|bär/i]
+  ];
+
+  function parseIngredients(text) {
+    var flags = [], t = text || "";
+    RULES.forEach(function (r) { if (r[1].test(t)) flags.push(r[0]); });
+    // sugar early in the list = high sugar
+    var parts = t.split(/[,;\n•·]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var firstThree = parts.slice(0, 3).join(" ");
+    if (/sugar|syrup|dextrose|fructose|glucose|socker|sirap/i.test(firstThree)) flags.push("High sugar");
+    // several additives = highly processed
+    var eCount = (t.match(/\bE\d{3}/g) || []).length;
+    if (eCount >= 2 || parts.length >= 15) flags.push("Highly processed");
+    return { flags: flags.filter(function (f, i, a) { return a.indexOf(f) === i; }), parts: parts };
+  }
+
+  var LASER = "Laser session (face)";
+  var ROUTINE = {
+    Morning: ["Cleanse — LRP Toleriane Foaming Gel Double Cleanser",
+              "Moisturise — LRP Toleriane Dermallergo Crème",
+              "SPF — LRP Anthelios UVMune 400 Ultra Light Fluid SPF 50+"],
+    Night:   ["Cleanse — LRP Effaclar Micro-Peel Gel",
+              "Active — Medik8 Crystal Retinal 20",
+              "Moisturise — LRP Cicaplast Baume B5+"],
+    "Paused for laser": ["Retinal stops around each session — tag those days as Off retinal"]
+  };
+
+  var GROUPS = [
+    { name: "Ate & drank", tags: ["Milk","Cheese","Yogurt","Whey protein","Chocolate","Sweets / sugar",
+      "Soda","Energy drink","Coffee","Alcohol","Fried / fast food","White bread / pasta / rice",
+      "Red meat","Fish","Lots of veg & fruit","Nuts","Spicy food","Lots of water"] },
+    { name: "Routine changes", tags: [LASER, "Off retinal (laser break)", "Skipped retinal",
+      "Extra / stronger active","Skipped AM wash","Skipped sunscreen","Re-applied sunscreen",
+      "Skipped PM wash","Washed face 3+ times","Spot treatment","Face mask","New product",
+      "Makeup","Shaved","Picked or popped","Touched face a lot","Fresh pillowcase",
+      "Sweaty, didn't wash"] },
+    { name: "Body & day", tags: ["Slept under 6h","Slept 8h+","Stressed","Exercised","Sick",
+      "Hot / humid","Smoked or vaped"] }
+  ];
+
+  // ---------- dates ----------
+  function todayStr() { return iso(new Date()); }
+  function iso(d) { return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function pad(n) { return n < 10 ? "0"+n : ""+n; }
+  function shift(s, n) { var p = s.split("-"); var d = new Date(+p[0],+p[1]-1,+p[2]); d.setDate(d.getDate()+n); return iso(d); }
+  function parseD(s) { var p = s.split("-"); return new Date(+p[0],+p[1]-1,+p[2]); }
+  function diffDays(a, b) { return Math.round((parseD(b) - parseD(a)) / 86400000); }
+  function longDate(s) {
+    if (s === todayStr()) return "Today";
+    if (s === shift(todayStr(),-1)) return "Yesterday";
+    return parseD(s).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
+  }
+
+  function load() {
+    store.get().then(function (raw) {
+      if (raw) { try { var v = JSON.parse(raw);
+        state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || []; } catch (e) {} }
+      render();
+    }).catch(render);
+  }
+  function save() {
+    flash();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { store.set(JSON.stringify(state)); } catch (e) {}
+    }, 250);
+  }
+  function flash() { var el = document.querySelector(".saved"); if (!el) return;
+    el.classList.add("on"); clearTimeout(el._t);
+    el._t = setTimeout(function(){ el.classList.remove("on"); }, 1100); }
+
+  function entry(d) {
+    var e = state.days[d];
+    if (!e) e = state.days[d] = { k:{co:0,inf:0,dp:0}, nw:0, s:null, t:[], f:[], z:[], n:"" };
+    if (!e.k) e.k = { co:0, inf:(e.c||0), dp:0 };
+    if (e.nw == null) e.nw = 0;
+    if (!e.t) e.t = []; if (!e.f) e.f = []; if (!e.z) e.z = [];
+    return e;
+  }
+  function peek(d) { return state.days[d]; }
+  function totalOf(e) {
+    if (!e) return null;
+    if (e.k) return (e.k.co||0)+(e.k.inf||0)+(e.k.dp||0);
+    return e.c == null ? null : e.c;
+  }
+  function metric(e, m) {
+    if (!e) return null;
+    if (m === "nw") return e.nw == null ? null : e.nw;
+    if (m === "all") return totalOf(e);
+    return e.k ? (e.k[m]||0) : null;
+  }
+  function touched(e) { return !!e && (e.k || e.c != null || (e.t&&e.t.length) || (e.f&&e.f.length)); }
+  function foodByName(n) { for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return state.foods[i]; return null; }
+  function effective(e) {
+    var out = (e.t||[]).slice();
+    (e.f||[]).forEach(function (nm) {
+      if (out.indexOf(nm)<0) out.push(nm);
+      var f = foodByName(nm); if (f) (f.fl||[]).forEach(function (fl) { if (out.indexOf(fl)<0) out.push(fl); });
+    });
+    return out;
+  }
+  function kindOf(t) { return FLAGS.indexOf(t)>=0 ? "ing" : foodByName(t) ? "food" : "tag"; }
+  function allTags() {
+    var out = [];
+    GROUPS.forEach(function (g) { g.tags.forEach(function (t) { if (out.indexOf(t)<0) out.push(t); }); });
+    state.custom.forEach(function (t) { if (out.indexOf(t)<0) out.push(t); });
+    state.foods.forEach(function (f) { if (out.indexOf(f.n)<0) out.push(f.n);
+      (f.fl||[]).forEach(function (fl) { if (out.indexOf(fl)<0) out.push(fl); }); });
+    return out;
+  }
+
+  function render() {
+    var html = view==="today" ? vToday() : view==="foods" ? vFoods()
+             : view==="patterns" ? vPatterns() : vLog();
+    document.getElementById("app").innerHTML = html + nav() + (sheet||"");
+    bind();
+    if (view==="today") { var s = document.querySelector(".day.sel"); if (s) s.scrollIntoView({block:"nearest",inline:"center"}); }
+  }
+
+  function strip() {
+    var tot = [];
+    for (var i=29;i>=0;i--) { var t = totalOf(peek(shift(todayStr(),-i))); tot.push(t||0); }
+    var max = Math.max(4, Math.max.apply(null, tot));
+    var h = '<div class="strip-shell"><div class="strip">';
+    for (var j=29;j>=0;j--) {
+      var dd = shift(todayStr(),-j), e = peek(dd), t = totalOf(e), dt = parseD(dd);
+      h += '<button class="day'+(dd===sel?" sel":"")+'" data-day="'+dd+'"><span class="bar-slot">';
+      if (t == null) h += '<span class="seg none"></span>';
+      else if (t === 0) h += '<span class="seg zero"></span>';
+      else if (e.k) { ["dp","inf","co"].forEach(function (k) { var v = e.k[k]||0; if (!v) return;
+          h += '<span class="seg '+k+'" style="height:'+Math.max(2,Math.round((v/max)*54))+'px"></span>'; }); }
+      else h += '<span class="seg inf" style="height:'+Math.max(2,Math.round((t/max)*54))+'px"></span>';
+      h += '</span><span class="dnum">'+dt.getDate()+'</span><span class="dow">'
+         + dt.toLocaleDateString(undefined,{weekday:"short"}).slice(0,1)+'</span></button>';
+    }
+    return h+'</div></div>';
+  }
+
+  function vToday() {
+    var e = peek(sel), k = e && e.k ? e.k : { co:0, inf:(e&&e.c)||0, dp:0 };
+    var tot = (k.co||0)+(k.inf||0)+(k.dp||0);
+    var h = strip() + '<div class="wrap">';
+    h += '<div class="head"><span class="date">'+longDate(sel)+'</span><span class="saved">Saved</span></div>';
+    h += '<div class="total"><span class="cnum">'+tot+'</span><span class="clab">Spots today</span></div>';
+    h += '<div class="types">';
+    TYPES.forEach(function (t) {
+      h += '<div class="trow"><span class="tdot" style="background:'+t.col+'"></span>'
+         + '<span class="tname">'+t.name+'<span class="thint">'+t.hint+'</span></span>'
+         + '<button class="mini" data-type="'+t.k+'" data-step="-1">&minus;</button>'
+         + '<span class="tval">'+(k[t.k]||0)+'</span>'
+         + '<button class="mini" data-type="'+t.k+'" data-step="1">+</button></div>';
+    });
+    h += '<div class="trow newrow"><span class="tdot" style="background:var(--mark)"></span>'
+       + '<span class="tname">New today<span class="thint">appeared since yesterday</span></span>'
+       + '<button class="mini" data-new="-1">&minus;</button>'
+       + '<span class="tval">'+((e&&e.nw)||0)+'</span>'
+       + '<button class="mini" data-new="1">+</button></div>'
+       + '<button class="helplink" data-help="1">What counts as what?</button></div>';
+
+    h += '<div class="grp"><div class="grph">Skin feel</div><div class="sev">';
+    ["Fine","Tight","Stinging","Raw"].forEach(function (s,i) {
+      h += '<button class="sevb'+(e&&e.s===i?" on":"")+'" data-sev="'+i+'">'+s+'</button>';
+    });
+    h += '</div></div>';
+
+    h += '<div class="grp"><div class="grph">Where</div><div class="tags">';
+    ZONES.forEach(function (z) {
+      h += '<button class="tag'+(e&&e.z&&e.z.indexOf(z)>=0?" on":"")+'" data-zone="'+esc(z)+'">'+esc(z)+'</button>';
+    });
+    h += '</div></div>';
+
+    h += '<div class="grp"><div class="grph">Your foods</div><div class="tags">';
+    state.foods.forEach(function (f) {
+      h += '<button class="tag'+(e&&e.f&&e.f.indexOf(f.n)>=0?" on":"")+'" data-food="'+esc(f.n)+'">'+esc(f.n)+'</button>';
+    });
+    h += '<button class="tag scan" data-newfood="1">+ Add a food</button></div>'
+       + (state.foods.length?'':'<div class="rowmeta" style="margin-top:9px">Add a product once and it lives here as a one-tap button.</div>')
+       + '</div>';
+
+    GROUPS.forEach(function (g) {
+      h += '<div class="grp"><div class="grph">'+g.name+'</div><div class="tags">';
+      g.tags.forEach(function (t) { h += tagBtn(t, e&&e.t); });
+      h += '</div></div>';
+    });
+
+    h += '<div class="grp"><div class="grph">Yours</div><div class="tags">';
+    state.custom.forEach(function (t) { h += tagBtn(t, e&&e.t); });
+    h += '<button class="tag add" data-add="1">+ Add your own</button></div></div>';
+
+    h += '<div class="grp"><div class="grph">Anything else</div>'
+       + '<textarea id="notes" placeholder="Late night, new detergent, stressful week…">'+esc((e&&e.n)||"")+'</textarea></div>';
+    return h+'</div>';
+  }
+  function tagBtn(t, list) {
+    return '<button class="tag'+(list&&list.indexOf(t)>=0?" on":"")+'" data-tag="'+esc(t)+'">'+esc(t)+'</button>';
+  }
+
+  function vFoods() {
+    var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Your foods</h2>'
+      + '<div class="sub">Add a product once. Its ingredients get pooled into groups that can be '
+      + 'compared across everything you eat.</div>'
+      + '<button class="btn go" data-newfood="1">Add a food</button><div style="height:22px"></div>';
+    if (!state.foods.length)
+      h += '<div class="note">Nothing saved yet. On the packet, use your camera to select the '
+         + 'ingredient text and copy it — then paste it in and the groups fill themselves.</div>';
+    state.foods.forEach(function (f, i) {
+      h += '<div class="row"><div><div class="rowname">'+esc(f.n)+'</div>'
+         + '<div class="rowmeta">'+(f.fl||[]).map(esc).join(" · ")+'</div>'
+         + '<div class="rowmeta" style="color:var(--faint)">'+esc((f.ing||[]).slice(0,10).join(", "))
+         + ((f.ing||[]).length>10?"…":"")+'</div></div>'
+         + '<button class="tag" data-del="'+i+'">Delete</button></div>';
+    });
+    return h+'</div>';
+  }
+
+  var draft = { name:"", flags:[], ingredients:[], raw:"" };
+  function openSheet(stage, data) { sheet = sheetHTML(stage, data||draft); render(); }
+  function closeSheet() { sheet = null; render(); }
+
+  function sheetHTML(stage, data) {
+    var h = '<div class="sheet"><div class="sheet-in">';
+    if (stage === "help") {
+      h += '<h2 class="sec">What counts as what</h2>'
+        + '<div class="sub">Use your fingertip, not your eye. Press it.</div>'
+        + '<div class="grp"><div class="grph">Clogged</div><div class="note">No redness, no pain. '
+        + 'Blackheads, whiteheads, rough little bumps you feel more than see. <b>Leave your nose out '
+        + 'of this number</b> — those are sebaceous filaments, normal pore anatomy that refills in days. '
+        + 'A constant can\'t explain a change, it just buries one.</div></div>'
+        + '<div class="grp"><div class="grph">Inflamed</div><div class="note">Red, sitting near the '
+        + 'surface. <b>Head or no head, both count.</b> The ones where you can see something under it '
+        + 'and redness around it but nothing has formed yet go here — same spot, earlier stage.</div></div>'
+        + '<div class="grp"><div class="grph">Deep</div><div class="note">A firm lump you can feel '
+        + '<b>deeper than the redness looks</b>, and it hurts to press. May be red, may be skin-coloured. '
+        + 'Often never forms a head. Lasts a week or more.</div></div>'
+        + '<div class="grp"><div class="grph">New today</div><div class="note">How many turned up '
+        + '<b>since yesterday</b>, any kind. The three counts above are standing totals, so one spot is '
+        + 'counted every day it hangs around — good for severity, bad for cause. New arrivals point at '
+        + 'something that happened a day or two ago.</div></div>'
+        + '<div class="grp"><div class="grph">Skin feel</div><div class="note">Not about spots — about '
+        + '<b>irritation</b>. <b>Fine</b>: no complaints. <b>Tight</b>: dry, flaky, stretched after '
+        + 'cleansing. <b>Stinging</b>: burns on application, or blotchy redness across whole areas. '
+        + '<b>Raw</b>: sore to touch, peeling, you\'d skip the retinal tonight.</div></div>'
+        + '<button class="btn go" data-close="1">Got it</button>';
+    } else {
+      h += '<h2 class="sec">Add a food</h2>'
+        + '<div class="sub">Point your camera at the ingredient list, tap the text-select icon, copy, '
+        + 'and paste it below. The groups fill in automatically — correct anything it gets wrong.</div>'
+        + '<input type="text" id="fname" value="'+esc(data.name||"")+'" placeholder="Name it — e.g. protein bar">'
+        + '<div style="height:8px"></div>'
+        + '<textarea id="fing" placeholder="Paste the ingredient list here (optional)">'+esc(data.raw||"")+'</textarea>'
+        + '<button class="btn" data-parse="1">Read the ingredients</button>'
+        + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
+      FLAGS.forEach(function (fl) {
+        h += '<button class="tag'+((data.flags||[]).indexOf(fl)>=0?" on":"")+'" data-flag="'+esc(fl)+'">'+esc(fl)+'</button>';
+      });
+      h += '</div></div>'
+        + '<button class="btn go" data-savefood="1">Save it</button>'
+        + '<button class="btn" data-close="1">Cancel</button>';
+    }
+    return h+'</div></div>';
+  }
+
+  function grabDraft() {
+    var n = document.getElementById("fname"), g = document.getElementById("fing");
+    if (n) draft.name = n.value;
+    if (g) draft.raw = g.value;
+  }
+
+  function vPatterns() {
+    var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Patterns</h2>'
+      + '<div class="sub">Pick which kind of spot to analyse — they don\'t share the same causes.</div>'
+      + '<div class="chips">';
+    MEASURES.forEach(function (m) {
+      h += '<button class="chip'+(m[0]===measure?" on":"")+'" data-measure="'+m[0]+'">'+m[1]+'</button>';
+    });
+    h += '</div><div class="chips">';
+    [0,1,2,3].forEach(function (l) {
+      h += '<button class="chip'+(l===lag?" on":"")+'" data-lag="'+l+'">'+(l===0?"Same day":l+"d before")+'</button>';
+    });
+    h += '</div>' + laserPanel();
+
+    var res = analyse(lag, measure);
+    if (!res.length) {
+      h += '<div class="note">Nothing to compare yet. Each item needs <b>3 days with it</b> and '
+         + '<b>3 days without it</b>. Two or three weeks of logging usually does it.</div>';
+    } else {
+      h += '<div class="note" style="margin-bottom:16px">Difference in average count on days that '
+         + 'followed an item, versus days that didn\'t. Gold rows are <b>ingredient groups</b> pooled '
+         + 'across your saved products — trust those more, they have more days behind them. '
+         + '<b>Correlation, not cause.</b></div>';
+      res.forEach(function (r) {
+        var k = kindOf(r.tag), cls = r.delta>0?"up":r.delta<0?"down":"";
+        h += '<div class="row"><div><div class="rowname">'
+           + (k==="ing"?'<span class="kind ing">ingredient</span>':k==="food"?'<span class="kind">product</span>':'')
+           + esc(r.tag)+'</div><div class="rowmeta">'+r.a.toFixed(1)+' with ('+r.na+'d) · '
+           + r.b.toFixed(1)+' without ('+r.nb+'d)</div></div>'
+           + '<div class="delta '+cls+'">'+(r.delta>0?"+":"")+r.delta.toFixed(1)+'</div></div>';
+      });
+    }
+    return h+'</div>';
+  }
+
+  function laserPanel() {
+    var sessions = Object.keys(state.days).filter(function (d) {
+      var e = state.days[d]; return e && e.t && e.t.indexOf(LASER) >= 0; }).sort();
+    if (!sessions.length) return "";
+    var buckets = []; for (var i=0;i<=14;i++) buckets.push([]);
+    Object.keys(state.days).forEach(function (d) {
+      var v = metric(state.days[d], measure); if (v == null) return;
+      var best = null;
+      sessions.forEach(function (s) { var g = diffDays(s,d); if (g>=0 && g<=14 && (best===null||g<best)) best = g; });
+      if (best !== null) buckets[best].push(v);
+    });
+    var avgs = buckets.map(function (b) { return b.length ? mean(b) : null; });
+    var max = Math.max.apply(null, avgs.map(function (a) { return a==null?0:a; }));
+    if (!max) return "";
+    var h = '<div class="grp"><div class="grph">After a laser session</div>'
+      + '<div class="rowmeta" style="margin-bottom:4px">'+sessions.length+' session'
+      + (sessions.length===1?"":"s")+' · average by days since</div><div class="lwrap">';
+    avgs.forEach(function (a, i) {
+      h += '<div class="lcol"><div class="lbar'+(a!=null&&a>=max*0.85?" hot":"")+'" style="height:'
+         + (a==null?2:Math.max(2,Math.round((a/max)*76)))+'px"></div><div class="lday">'+i+'</div></div>';
+    });
+    return h + '</div><div class="rowmeta">Day 0 is the session. A bump in the first week is usually '
+      + 'the laser and the retinal break, not your diet.</div></div>';
+  }
+
+  function analyse(l, m) {
+    var out = [], days = Object.keys(state.days), cache = {};
+    days.forEach(function (d) { cache[d] = effective(state.days[d]); });
+    allTags().forEach(function (t) {
+      var A = [], B = [];
+      days.forEach(function (d) {
+        var v = metric(state.days[d], m); if (v == null) return;
+        var sd = shift(d, -l), src = state.days[sd];
+        if (!touched(src)) return;
+        ((cache[sd]||[]).indexOf(t) >= 0 ? A : B).push(v);
+      });
+      if (A.length < 3 || B.length < 3) return;
+      var a = mean(A), b = mean(B);
+      out.push({ tag:t, a:a, b:b, delta:a-b, na:A.length, nb:B.length });
+    });
+    out.sort(function (x,y) { return Math.abs(y.delta) - Math.abs(x.delta); });
+    return out;
+  }
+  function mean(a) { var s=0; for (var i=0;i<a.length;i++) s+=a[i]; return s/a.length; }
+
+  function vLog() {
+    var days = Object.keys(state.days).sort();
+    var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Your log</h2>'
+      + '<div class="sub">'+days.length+' '+(days.length===1?"day":"days")+' recorded · '
+      + state.foods.length+' saved foods.</div>';
+    h += '<div class="grp"><div class="grph">Standing routine</div>';
+    Object.keys(ROUTINE).forEach(function (k) {
+      h += '<div class="rowmeta" style="margin:10px 0 4px">'+k.toUpperCase()+'</div>';
+      ROUTINE[k].forEach(function (s) { h += '<div style="font-size:13.5px;padding:3px 0">'+esc(s)+'</div>'; });
+    });
+    h += '<div class="note" style="margin-top:12px">Identical most days, so these aren\'t tags — '
+       + 'a constant can\'t explain a change. Tag the <b>days you deviate</b> instead.</div></div>';
+
+    h += '<div class="grp"><div class="grph">Backup</div>'
+       + '<button class="btn" data-copy="1">Copy as CSV</button>'
+       + '<button class="btn" data-backup="1">Copy backup (JSON)</button>'
+       + '<button class="btn" data-restore="1">Restore from backup</button>'
+       + '<div class="rowmeta" style="margin-top:10px">Your log lives only on this phone. '
+       + 'Paste a JSON backup into a note now and then — clearing Safari data would wipe it.</div></div>';
+
+    h += '<div class="grp"><div class="grph">Entries</div>';
+    if (!days.length) h += '<div class="note">Nothing yet. Head to Today.</div>';
+    days.slice().reverse().forEach(function (d) {
+      var e = state.days[d], k = e.k||{};
+      h += '<div class="row"><div><div class="rowname">'+longDate(d)+'</div><div class="rowmeta">'
+         + (e.nw ? e.nw+' new · ' : '')
+         + (e.k ? (k.co||0)+' clogged · '+(k.inf||0)+' inflamed · '+(k.dp||0)+' deep' : 'no breakdown')
+         + '</div></div><div class="delta">'+(totalOf(e)==null?"–":totalOf(e))+'</div></div>';
+    });
+    return h+'</div></div>';
+  }
+
+  function csv() {
+    var tags = allTags();
+    var rows = ["date,new_today,total,clogged,inflamed,deep,skinfeel,zones,"+tags.map(function(t){return '"'+t+'"';}).join(",")+",notes"];
+    Object.keys(state.days).sort().forEach(function (d) {
+      var e = state.days[d], k = e.k||{}, eff = effective(e);
+      var cells = [d, e.nw==null?"":e.nw, totalOf(e)==null?"":totalOf(e), k.co==null?"":k.co,
+        k.inf==null?"":k.inf, k.dp==null?"":k.dp, e.s==null?"":e.s, '"'+(e.z||[]).join("; ")+'"'];
+      tags.forEach(function (t) { cells.push(eff.indexOf(t)>=0?1:0); });
+      cells.push('"'+String(e.n||"").replace(/"/g,'""')+'"');
+      rows.push(cells.join(","));
+    });
+    return rows.join("\n");
+  }
+
+  function copyOut(text, btn, label) {
+    function done() { btn.textContent = "Copied"; setTimeout(function(){ btn.textContent = label; }, 1600); }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallback(text, done); });
+    } else fallback(text, done);
+  }
+  function fallback(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    try { document.execCommand("copy"); done(); } catch (e) { prompt("Copy this:", text); }
+    document.body.removeChild(ta);
+  }
+
+  function nav() {
+    var items = [["today","Today"],["foods","Foods"],["patterns","Patterns"],["log","Log"]];
+    var h = '<div class="nav">';
+    items.forEach(function (i) { h += '<button data-view="'+i[0]+'" class="'+(view===i[0]?"on":"")+'">'+i[1]+'</button>'; });
+    return h+'</div>';
+  }
+  function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+  function bind() {
+    document.getElementById("app").onclick = function (ev) {
+      var t = ev.target.closest("button"); if (!t) return;
+      var d = t.dataset;
+
+      if (d.close) return closeSheet();
+      if (d.help) return openSheet("help");
+      if (d.newfood) { draft = {name:"",flags:[],ingredients:[],raw:""}; return openSheet("food"); }
+      if (d.parse) {
+        grabDraft();
+        var r = parseIngredients(draft.raw);
+        draft.flags = r.flags; draft.ingredients = r.parts;
+        return openSheet("food", draft);
+      }
+      if (d.flag) {
+        grabDraft();
+        var i0 = draft.flags.indexOf(d.flag);
+        if (i0>=0) draft.flags.splice(i0,1); else draft.flags.push(d.flag);
+        return openSheet("food", draft);
+      }
+      if (d.savefood) {
+        grabDraft();
+        var name = (draft.name||"").trim();
+        if (!name) { var el = document.getElementById("fname"); el && el.focus(); return; }
+        if (!draft.ingredients.length && draft.raw) draft.ingredients = parseIngredients(draft.raw).parts;
+        var ex = foodByName(name);
+        if (ex) { ex.ing = draft.ingredients; ex.fl = draft.flags; }
+        else state.foods.push({ n:name, ing:draft.ingredients, fl:draft.flags });
+        var e0 = entry(sel); if (e0.f.indexOf(name)<0) e0.f.push(name);
+        sheet = null; save(); return render();
+      }
+      if (d.del) {
+        var f = state.foods[+d.del];
+        if (f && confirm('Delete "'+f.n+'"? Days you already logged it keep the record.')) {
+          state.foods.splice(+d.del,1); save(); render();
+        }
+        return;
+      }
+      if (d.view) { view = d.view; sheet = null; return render(); }
+      if (d.day) { sel = d.day; return render(); }
+      if (d.lag) { lag = +d.lag; return render(); }
+      if (d.lag === "0") { lag = 0; return render(); }
+      if (d.measure) { measure = d.measure; return render(); }
+      if (d.type) { var e1 = entry(sel);
+        e1.k[d.type] = Math.max(0,(e1.k[d.type]||0)+(+d.step)); save(); return render(); }
+      if (d.new) { var en = entry(sel); en.nw = Math.max(0,(en.nw||0)+(+d.new)); save(); return render(); }
+      if (d.sev) { var e2 = entry(sel), v = +d.sev; e2.s = e2.s===v?null:v; save(); return render(); }
+      if (d.zone) { var e6 = entry(sel), iz = e6.z.indexOf(d.zone);
+        if (iz>=0) e6.z.splice(iz,1); else e6.z.push(d.zone); save(); return render(); }
+      if (d.food) { var e3 = entry(sel), i1 = e3.f.indexOf(d.food);
+        if (i1>=0) e3.f.splice(i1,1); else e3.f.push(d.food); save(); return render(); }
+      if (d.tag) { var e4 = entry(sel), i2 = e4.t.indexOf(d.tag);
+        if (i2>=0) e4.t.splice(i2,1); else e4.t.push(d.tag); save(); return render(); }
+      if (d.add) {
+        var nm2 = prompt("Name it — food, habit, product, anything:");
+        if (nm2 && nm2.trim()) {
+          nm2 = nm2.trim();
+          if (state.custom.indexOf(nm2)<0) state.custom.push(nm2);
+          var e5 = entry(sel); if (e5.t.indexOf(nm2)<0) e5.t.push(nm2);
+          save(); render();
+        }
+        return;
+      }
+      if (d.copy) return copyOut(csv(), t, "Copy as CSV");
+      if (d.backup) return copyOut(JSON.stringify(state), t, "Copy backup (JSON)");
+      if (d.restore) {
+        var raw = prompt("Paste a JSON backup. This replaces everything currently in the app.");
+        if (!raw) return;
+        try {
+          var v = JSON.parse(raw);
+          if (!v || typeof v !== "object" || !v.days) throw new Error("shape");
+          state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || [];
+          save(); render();
+        } catch (e) { alert("That didn't look like a backup from this app. Nothing was changed."); }
+        return;
+      }
+    };
+    var n = document.getElementById("notes");
+    if (n) n.oninput = function () { entry(sel).n = n.value; save(); };
+  }
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
