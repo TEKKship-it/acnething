@@ -144,6 +144,8 @@
   .szrow input { flex: 1; }
   .szrow select { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
     color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; min-width: 90px; }
+  .cropc { width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line); margin: 10px 0 4px; touch-action: none; }
   .ocr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
     color: var(--mark); min-height: 16px; margin-top: 10px; line-height: 1.5; }
   .warnb { font-size: 13px; color: var(--paper-dim); line-height: 1.5; margin: 6px 0 4px; }
@@ -209,58 +211,46 @@
     "Red meat","Fish / seafood","Whole grain","Fruit / veg","Highly processed"];
 
   // offline ingredient matcher — no network, no API key
-  var RULES = [
-    ["Dairy", /milk|lactose|whey|casein|cream|butter(?!nut)|cheese|yogh?urt|yoghurt|buttermilk|ghee|kvarg|kesella|grädde|smör|ost/i],
-    ["Whey / casein", /whey|casein|vassle/i],
-    ["Egg", /\begg|albumen|ägg/i],
-    ["Soy", /soy|soya|soja/i],
-    ["Gluten / wheat", /wheat|gluten|barley|rye|semolina|spelt|durum|vete|korn|råg/i],
-    ["Added sugar", /sugar|syrup|dextrose|fructose|glucose|maltodextrin|honey|molasses|invert|sucrose|maltose|socker|sirap|honung/i],
-    ["Artificial sweetener", /aspartame|sucralose|acesulfame|saccharin|stevia|steviol|sorbitol|xylitol|maltitol|erythritol|sötningsmedel/i],
-    ["Cocoa / chocolate", /cocoa|cacao|chocolate|kakao|choklad/i],
-    ["Nuts", /almond|hazelnut|peanut|cashew|walnut|pistachio|pecan|\bnuts?\b|mandel|jordnöt|nöt/i],
-    ["Seed oils", /sunflower oil|rapeseed|canola|soybean oil|corn oil|safflower|seed oil|solros|raps/i],
-    ["Palm oil", /palm oil|palm fat|palm kernel|palmolja|palmfett/i],
-    ["Fried / high fat", /fried|deep-?fried|shortening|friterad|stekt/i],
-    ["Caffeine", /caffeine|coffee|guarana|green tea extract|koffein|kaffe/i],
-    ["Alcohol", /\bethanol|\bbeer\b|\bwine\b|\bvodka|\brum\b|liqueur|alkohol/i],
-    ["Iodine-rich", /seaweed|kelp|nori|iodi[sz]ed|jodid|tång/i],
-    ["Additives / preservatives", /\bE\d{3}|preservative|stabili[sz]er|emulsifier|flavou?ring|anti-?caking|colou?r \(|konserverings|stabiliserings|emulgering|arom/i],
-    ["Spicy", /chill?i|cayenne|jalapeno|sriracha|harissa|capsic|stark/i],
-    ["Fermented", /fermented|kimchi|miso|kefir|sourdough|kombucha|fermenterad|surdeg/i],
-    ["Red meat", /beef|pork|lamb|bacon|\bham\b|salami|veal|mince|nötkött|fläsk/i],
-    ["Fish / seafood", /salmon|tuna|\bcod\b|shrimp|prawn|\bfish\b|anchov|sardine|mackerel|lax|räk|fisk/i],
-    ["Whole grain", /wholegrain|whole ?grain|wholemeal|\boats?\b|brown rice|quinoa|fullkorn|havre/i],
-    ["Fruit / veg", /apple|banana|berr|tomato|carrot|spinach|broccoli|orange|mango|lentil|\bbeans?\b|äpple|tomat|morot|bär/i]
-  ];
-
-  var UNITS = [["g","g"],["ml","ml"],["piece","pcs"]];
-
-  // find a net weight / serving size in scanned label text
-  function findSize(text) {
-    var t = String(text || "");
-    // "2 x 200 g" style multipacks
-    var m = t.match(/(\d+)\s*[x\u00d7]\s*(\d{2,4})\s*(g|ml)\b/i);
-    if (m) return { sz: parseInt(m[1],10) * parseInt(m[2],10), u: m[3].toLowerCase() };
-    // largest plain "NNN g" / "NNN ml" wins — usually the pack weight
-    var best = null, re = /(\d{2,4}(?:[.,]\d)?)\s*(g|ml)\b/gi, x;
-    while ((x = re.exec(t))) {
-      var v = parseFloat(String(x[1]).replace(",", "."));
-      if (v >= 10 && v <= 2000 && (!best || v > best.sz)) best = { sz: Math.round(v), u: x[2].toLowerCase() };
-    }
-    return best;
+  // OCR mangles diacritics, so match against a folded ASCII form of the text
+  function fold(t) {
+    return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
+  var RULES = [
+    ["Dairy", /milk|mjolk|filmjolk|lactose|laktos|whey|vassle|casein|kasein|cream(?!\s*of\s*tartar)|gradde|creme fraiche|butter(?!nut)|\bsmor\b|cheese|\bost\b|\bostar\b|ostpulver|mozzarella|cheddar|parmesan|\bfeta\b|ricotta|halloumi|mascarpone|kvarg|kvark|kesella|yogh?urt|\bghee\b|\bskyr\b|kefir|prastost|herrgard|gouda|brie/],
+    ["Whey / casein", /whey|vassle|casein|kasein|mjolkprotein|milk protein/],
+    ["Egg", /\begg|\bagg\b|aggula|aggvita|albumen|aggpulver/],
+    ["Soy", /\bsoy|\bsoja/],
+    ["Gluten / wheat", /wheat|\bvete|durum|gluten|barley|\bkorn\b|\brye\b|\brag\b|ragmjol|semolina|spelt|dinkel|mannagryn/],
+    ["Added sugar", /sugar|socker|syrup|sirap|dextros|dextrose|fruktos|fructose|glukos|glucose|maltodextrin|honey|honung|molasses|melass|invertsocker|sucrose|maltose|agavesirap/],
+    ["Artificial sweetener", /aspartam|sucralos|sukralos|acesulfam|saccharin|sackarin|stevia|steviol|sorbitol|xylitol|maltitol|erytritol|erythritol|sotningsmedel|sweetener/],
+    ["Cocoa / chocolate", /cocoa|cacao|kakao|chocolate|choklad/],
+    ["Nuts", /almond|mandel|hazelnut|hasselnot|peanut|jordnot|cashew|walnut|valnot|pistachio|pistage|pecan|pekan|\bnuts\b|\bnotter\b|nougat/],
+    ["Seed oils", /sunflower oil|solrosolja|rapeseed|rapsolja|canola|soybean oil|sojaolja|corn oil|majsolja|safflower|seed oil|vegetabilisk olja|vegetable oil/],
+    ["Palm oil", /palm oil|palmolja|palm fat|palmfett|palm kernel|palmkarn/],
+    ["Fried / high fat", /\bfried|friterad|\bstekt\b|shortening|panerad/],
+    ["Caffeine", /caffeine|koffein|coffee|\bkaffe|guarana|green tea extract|teextrakt/],
+    ["Alcohol", /ethanol|etanol|alkohol|\bwine\b|\bvin\b|\bbeer\b|whisky|vodka|\brum\b|likor|liqueur/],
+    ["Iodine-rich", /seaweed|kelp|\bnori\b|\btang\b|alger|iodi[sz]ed|jodid|joderat/],
+    ["Additives / preservatives", /\be\d{3}|preservative|konserveringsmedel|stabili[sz]|stabiliseringsmedel|emulsifier|emulgeringsmedel|fortjockningsmedel|fortjockning|flavou?ring|\barom\b|antioxidationsmedel|surhetsreglerande|smakforstarkare|anti-?caking|colou?r \(|fargamne/],
+    ["Spicy", /chill?i|cayenne|jalapeno|sriracha|harissa|capsic|\bstark\b/],
+    ["Fermented", /fermented|fermenterad|kimchi|\bmiso\b|kefir|sourdough|surdeg|kombucha|syrningskultur/],
+    ["Red meat", /\bbeef\b|notkott|\bpork\b|\bflask|\blamb\b|\blamm\b|bacon|\bham\b|skinka|salami|\bveal\b|\bkalv\b|mince|kottfars|korv/],
+    ["Fish / seafood", /salmon|\blax\b|tuna|tonfisk|\bcod\b|torsk|shrimp|prawn|\brak(?:or)?\b|\bfish\b|\bfisk|anchov|ansjovis|sardin|mackerel|makrill|\bsill\b/],
+    ["Whole grain", /wholegrain|whole ?grain|wholemeal|fullkorn|\boats?\b|havre|brown rice|brunt ris|quinoa|bulgur/],
+    ["Fruit / veg", /tomat|tomato|apple|\bapple\b|banan|berr|\bbar\b|carrot|morot|spinach|spenat|broccoli|orange|mango|lentil|linser|\bbeans?\b|bonor|arter\b|paprika|zucchini|aubergin/]
+  ];
+
   function parseIngredients(text) {
-    var flags = [], t = text || "";
+    var flags = [], t = fold(text);
     RULES.forEach(function (r) { if (r[1].test(t)) flags.push(r[0]); });
     // sugar early in the list = high sugar
     var parts = t.split(/[,;\n•·]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-    var firstThree = parts.slice(0, 3).join(" ");
-    if (/sugar|syrup|dextrose|fructose|glucose|socker|sirap/i.test(firstThree)) flags.push("High sugar");
-    // several additives = highly processed
-    var eCount = (t.match(/\bE\d{3}/g) || []).length;
-    if (eCount >= 2 || parts.length >= 15) flags.push("Highly processed");
+    var firstThree = fold(parts.slice(0, 3).join(" "));
+    if (/sugar|syrup|dextros|fruktos|glukos|socker|sirap/.test(firstThree)) flags.push("High sugar");
+    // additive count plus list length is a decent proxy for processing
+    var eCount = (t.match(/\be\d{3}/g) || []).length;
+    if (eCount >= 2 || (eCount >= 1 && parts.length >= 7) || parts.length >= 14) flags.push("Highly processed");
     return { flags: flags.filter(function (f, i, a) { return a.indexOf(f) === i; }), parts: parts };
   }
 
@@ -545,7 +535,8 @@
     return h+'</div>';
   }
 
-  var draft = { name:"", flags:[], ingredients:[], raw:"", sz:null, u:"g" };
+  var draft = { name:"", flags:[], ingredients:[], raw:"", rawFull:"", sz:null, u:"g" };
+  var shot = null, cropBox = null, cropView = null;
   function openSheet(stage, data) { sheet = sheetHTML(stage, data||draft); render(); }
   function closeSheet() { sheet = null; render(); }
 
@@ -573,6 +564,15 @@
         + 'cleansing. <b>Stinging</b>: burns on application, or blotchy redness across whole areas. '
         + '<b>Raw</b>: sore to touch, peeling, you\'d skip the retinal tonight.</div></div>'
         + '<button class="btn go" data-close="1">Got it</button>';
+    } else if (stage === "crop") {
+      h += '<h2 class="sec">Frame the ingredients</h2>'
+        + '<div class="sub">Drag a box around <b>just the ingredient list</b>. Leave out cooking '
+        + 'instructions and the nutrition table — they confuse the reader and add nothing.</div>'
+        + '<canvas id="cropc" class="cropc"></canvas>'
+        + '<div id="ocr" class="ocr"></div>'
+        + '<button class="btn go" data-docrop="1">Read this bit</button>'
+        + '<button class="btn" data-cropall="1">Read the whole photo</button>'
+        + '<button class="btn" data-close="1">Cancel</button>';
     } else if (stage === "routine") {
       var r = state.routine || {};
       h += '<h2 class="sec">Standing routine</h2>'
@@ -640,47 +640,146 @@
       var file = inp.files && inp.files[0];
       if (!file) return;
       grabDraft();
-      prepImage(file, function (canvas, dataUrl) {
+      ocrStatus("Loading photo…");
+      prepImage(file, function (canvas) {
         if (!canvas) return ocrStatus("That image didn't load. Try again.");
-        if (state.reader) readViaAI(dataUrl); else readViaOCR(canvas);
+        shot = canvas;
+        cropBox = null;
+        openSheet("crop", draft);
       });
     };
     inp.click();
   }
 
-  // downscale, greyscale, stretch contrast — small print needs the help
+  // keep resolution — OCR needs roughly 25px of character height to work at all
   function prepImage(file, cb) {
     var r = new FileReader();
     r.onload = function () {
       var img = new Image();
       img.onload = function () {
-        var max = 1800, w = img.width, h = img.height;
+        var max = 3000, w = img.width, h = img.height;
         if (Math.max(w, h) > max) { var k = max / Math.max(w, h); w = Math.round(w*k); h = Math.round(h*k); }
         var c = document.createElement("canvas"); c.width = w; c.height = h;
-        var ctx = c.getContext("2d");
-        ctx.drawImage(img, 0, 0, w, h);
-        try {
-          var d = ctx.getImageData(0, 0, w, h), p = d.data, i, lo = 255, hi = 0, g;
-          for (i = 0; i < p.length; i += 4) {
-            g = (p[i]*0.299 + p[i+1]*0.587 + p[i+2]*0.114) | 0;
-            p[i] = p[i+1] = p[i+2] = g;
-            if (g < lo) lo = g; if (g > hi) hi = g;
-          }
-          var span = Math.max(1, hi - lo);
-          for (i = 0; i < p.length; i += 4) {
-            g = ((p[i] - lo) / span) * 255;
-            g = g < 0 ? 0 : g > 255 ? 255 : g;
-            p[i] = p[i+1] = p[i+2] = g;
-          }
-          ctx.putImageData(d, 0, 0);
-        } catch (e) {}
-        cb(c, c.toDataURL("image/jpeg", 0.85));
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        cb(c);
       };
       img.onerror = function () { cb(null); };
       img.src = r.result;
     };
     r.onerror = function () { cb(null); };
     r.readAsDataURL(file);
+  }
+
+  // crop, upscale, then adaptive local threshold — this is what makes small print legible
+  function sharpen(src, box) {
+    var sx = Math.round(box.x), sy = Math.round(box.y),
+        sw = Math.max(8, Math.round(box.w)), sh = Math.max(8, Math.round(box.h));
+    var scale = Math.min(3, Math.max(1, 1700 / sw));
+    var w = Math.round(sw * scale), h = Math.round(sh * scale);
+    var c = document.createElement("canvas"); c.width = w; c.height = h;
+    var ctx = c.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+
+    try {
+      var d = ctx.getImageData(0, 0, w, h), p = d.data, n = w * h;
+      var gray = new Float64Array(n), i, j;
+      for (i = 0, j = 0; j < n; i += 4, j++) gray[j] = p[i]*0.299 + p[i+1]*0.587 + p[i+2]*0.114;
+
+      // integral image for O(1) window means
+      var iw = w + 1, integ = new Float64Array(iw * (h + 1));
+      for (var y = 0; y < h; y++) {
+        var rs = 0;
+        for (var x = 0; x < w; x++) {
+          rs += gray[y*w + x];
+          integ[(y+1)*iw + (x+1)] = integ[y*iw + (x+1)] + rs;
+        }
+      }
+      var rad = Math.max(8, Math.round(Math.min(w, h) / 45)), C = 10;
+      for (var yy = 0; yy < h; yy++) {
+        var y1 = yy - rad < 0 ? 0 : yy - rad, y2 = yy + rad > h-1 ? h-1 : yy + rad;
+        for (var xx = 0; xx < w; xx++) {
+          var x1 = xx - rad < 0 ? 0 : xx - rad, x2 = xx + rad > w-1 ? w-1 : xx + rad;
+          var area = (x2-x1+1) * (y2-y1+1);
+          var sum = integ[(y2+1)*iw + (x2+1)] - integ[y1*iw + (x2+1)]
+                  - integ[(y2+1)*iw + x1] + integ[y1*iw + x1];
+          var v = gray[yy*w + xx] < (sum/area) - C ? 0 : 255;
+          var k = (yy*w + xx) * 4;
+          p[k] = p[k+1] = p[k+2] = v; p[k+3] = 255;
+        }
+      }
+      ctx.putImageData(d, 0, 0);
+    } catch (e) {}
+    return c;
+  }
+
+  function setupCrop() {
+    var c = document.getElementById("cropc");
+    if (!c || !shot) return;
+    var maxW = Math.min(c.parentNode.clientWidth || 340, 520);
+    var scale = maxW / shot.width;
+    c.width = Math.round(shot.width * scale);
+    c.height = Math.round(shot.height * scale);
+    cropView = { scale: scale };
+    drawCrop();
+
+    var dragging = false, start = null;
+    function pos(ev) {
+      var r = c.getBoundingClientRect();
+      var t = ev.touches ? ev.touches[0] : ev;
+      return { x: (t.clientX - r.left) * (c.width / r.width),
+               y: (t.clientY - r.top) * (c.height / r.height) };
+    }
+    function down(ev) { ev.preventDefault(); dragging = true; start = pos(ev); cropBox = null; drawCrop(); }
+    function move(ev) {
+      if (!dragging) return;
+      ev.preventDefault();
+      var p = pos(ev);
+      cropBox = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y),
+                  w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) };
+      drawCrop();
+    }
+    function up() { dragging = false; }
+    c.addEventListener("touchstart", down, { passive: false });
+    c.addEventListener("touchmove", move, { passive: false });
+    c.addEventListener("touchend", up);
+    c.addEventListener("mousedown", down);
+    c.addEventListener("mousemove", move);
+    c.addEventListener("mouseup", up);
+  }
+
+  function drawCrop() {
+    var c = document.getElementById("cropc");
+    if (!c || !shot) return;
+    var ctx = c.getContext("2d");
+    ctx.drawImage(shot, 0, 0, c.width, c.height);
+    if (cropBox && cropBox.w > 6 && cropBox.h > 6) {
+      ctx.fillStyle = "rgba(9,11,22,.66)";
+      ctx.fillRect(0, 0, c.width, cropBox.y);
+      ctx.fillRect(0, cropBox.y + cropBox.h, c.width, c.height - cropBox.y - cropBox.h);
+      ctx.fillRect(0, cropBox.y, cropBox.x, cropBox.h);
+      ctx.fillRect(cropBox.x + cropBox.w, cropBox.y, c.width - cropBox.x - cropBox.w, cropBox.h);
+      ctx.strokeStyle = "#E8B84B"; ctx.lineWidth = 2;
+      ctx.strokeRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+    } else {
+      ctx.fillStyle = "rgba(9,11,22,.28)";
+      ctx.fillRect(0, 0, c.width, c.height);
+    }
+  }
+
+  function runCrop(whole) {
+    if (!shot) return;
+    var box;
+    if (whole || !cropBox || cropBox.w < 10 || cropBox.h < 10) {
+      box = { x: 0, y: 0, w: shot.width, h: shot.height };
+    } else {
+      var k = 1 / cropView.scale;
+      box = { x: cropBox.x * k, y: cropBox.y * k, w: cropBox.w * k, h: cropBox.h * k };
+    }
+    var sharp = sharpen(shot, box);
+    if (state.reader) readViaAI(sharp.toDataURL("image/jpeg", 0.9));
+    else readViaOCR(sharp);
   }
 
   var tessLoading = null;
@@ -708,8 +807,13 @@
         }
       });
     }).then(function (worker) {
-      return worker.recognize(canvas).then(function (res) {
-        return worker.terminate().then(function () { return res.data.text; });
+      return worker.setParameters({
+        tessedit_pageseg_mode: "6",
+        preserve_interword_spaces: "1"
+      }).then(function () {
+        return worker.recognize(canvas).then(function (res) {
+          return worker.terminate().then(function () { return res.data.text; });
+        });
       });
     }).then(function (text) {
       applyScan(text);
@@ -736,19 +840,50 @@
     });
   }
 
+  var ING_HEAD = /ingredien(?:ser|s|ts|ti)?|ingrediens|zutaten|sammans[aä]ttning/i;
+  var SECTION_END = /n[aä]ringsv[aä]rde|nutrition|per\s*100\s*g|tillagning|tillagas|cooking|preparation|microwave|mikro|ugn|oven|f[oö]rvar|storage|b[aä]st f[oö]re|best before|nettovikt|net weight|tillverkad|produced|distribu|återvinn|recycl|kundtj[aä]nst|customer/i;
+
+  // keep the ingredient paragraph, drop instructions and the nutrition table
+  function ingredientSection(text) {
+    var lines = String(text || "").split(/\n+/);
+    var start = -1, i;
+    for (i = 0; i < lines.length; i++) { if (ING_HEAD.test(lines[i])) { start = i; break; } }
+    if (start < 0) return null;
+    var out = [lines[start].replace(new RegExp("^.*?" + "ingredien\\w*\\s*[:.-]?", "i"), "")];
+    for (i = start + 1; i < lines.length; i++) {
+      if (SECTION_END.test(lines[i])) break;
+      out.push(lines[i]);
+    }
+    var joined = out.join(" ").trim();
+    return joined.length > 12 ? joined : null;
+  }
+
+  // strip lines that are mostly symbols — OCR noise from barcodes, logos, tables
+  function denoise(text) {
+    return String(text || "").split(/\n+/).filter(function (ln) {
+      var t = ln.trim();
+      if (t.length < 3) return false;
+      var letters = (t.match(/[A-Za-zÅÄÖåäöÉéÜü]/g) || []).length;
+      return letters / t.length > 0.5;
+    }).join("\n");
+  }
+
   function applyScan(text) {
-    var clean = String(text || "")
-      .replace(/[|]/g, "I")
-      .replace(/\s*\n\s*/g, " ")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-    if (!clean) return ocrStatus("Nothing readable in that shot. Try again closer.");
-    draft.raw = clean;
-    var r = parseIngredients(clean);
+    var cleaned = denoise(String(text || "").replace(/[|]/g, "I"));
+    var full = cleaned.replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+    if (!full || full.length < 8) {
+      return ocrStatus("Nothing readable there. Get closer, fill the frame with just the ingredients, and keep the packet flat.");
+    }
+    var section = ingredientSection(cleaned);
+    draft.rawFull = full;
+    draft.raw = (section || full).replace(/\s{2,}/g, " ").trim();
+    draft.foundSection = !!section;
+    var r = parseIngredients(draft.raw);
     draft.flags = r.flags;
     draft.ingredients = r.parts;
-    var sz = findSize(clean);
+    var sz = findSize(full);
     if (sz && !draft.sz) { draft.sz = sz.sz; draft.u = sz.u; }
+    shot = null; cropBox = null;
     openSheet("food", draft);
   }
 
@@ -961,6 +1096,15 @@
         sheet = null; save(); return render();
       }
       if (d.newfood) { draft = {name:"",flags:[],ingredients:[],raw:"",sz:null,u:"g"}; return openSheet("food"); }
+      if (d.docrop) return runCrop(false);
+      if (d.cropall) return runCrop(true);
+      if (d.usefull) {
+        draft.raw = draft.rawFull || draft.raw;
+        draft.foundSection = false;
+        var rf = parseIngredients(draft.raw);
+        draft.flags = rf.flags; draft.ingredients = rf.parts;
+        return openSheet("food", draft);
+      }
       if (d.cam) return pickImage(true);
       if (d.lib) return pickImage(false);
       if (d.parse) {
@@ -1055,6 +1199,7 @@
     };
     var n = document.getElementById("notes");
     if (n) n.oninput = function () { entry(sel).n = n.value; save(); };
+    if (document.getElementById("cropc")) setupCrop();
   }
 
   if ("serviceWorker" in navigator) {
