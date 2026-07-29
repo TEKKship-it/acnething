@@ -134,6 +134,16 @@
     padding: 14px; margin: 14px 0 0; }
   .warnt { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
     letter-spacing: .12em; text-transform: uppercase; color: var(--flare); }
+  .portions { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px 14px 8px; margin-top: 10px; }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+  .pname { flex: 1; font-size: 13.5px; line-height: 1.25; }
+  .pamt { display: block; font-size: 11px; color: var(--faint);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .szrow { display: flex; gap: 8px; }
+  .szrow input { flex: 1; }
+  .szrow select { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+    color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; min-width: 90px; }
   .ocr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
     color: var(--mark); min-height: 16px; margin-top: 10px; line-height: 1.5; }
   .warnb { font-size: 13px; color: var(--paper-dim); line-height: 1.5; margin: 6px 0 4px; }
@@ -169,7 +179,7 @@
 (function () {
   var KEY = "skinlog:v2";
   var state = { days: {}, custom: [], foods: [], routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
-  var view = "today", sel = todayStr(), lag = 1, measure = "nw", sheet = null, saveTimer = null;
+  var view = "today", sel = todayStr(), lag = 1, measure = "nw", mode = "presence", sheet = null, saveTimer = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
   var store = {
@@ -223,6 +233,23 @@
     ["Whole grain", /wholegrain|whole ?grain|wholemeal|\boats?\b|brown rice|quinoa|fullkorn|havre/i],
     ["Fruit / veg", /apple|banana|berr|tomato|carrot|spinach|broccoli|orange|mango|lentil|\bbeans?\b|äpple|tomat|morot|bär/i]
   ];
+
+  var UNITS = [["g","g"],["ml","ml"],["piece","pcs"]];
+
+  // find a net weight / serving size in scanned label text
+  function findSize(text) {
+    var t = String(text || "");
+    // "2 x 200 g" style multipacks
+    var m = t.match(/(\d+)\s*[x\u00d7]\s*(\d{2,4})\s*(g|ml)\b/i);
+    if (m) return { sz: parseInt(m[1],10) * parseInt(m[2],10), u: m[3].toLowerCase() };
+    // largest plain "NNN g" / "NNN ml" wins — usually the pack weight
+    var best = null, re = /(\d{2,4}(?:[.,]\d)?)\s*(g|ml)\b/gi, x;
+    while ((x = re.exec(t))) {
+      var v = parseFloat(String(x[1]).replace(",", "."));
+      if (v >= 10 && v <= 2000 && (!best || v > best.sz)) best = { sz: Math.round(v), u: x[2].toLowerCase() };
+    }
+    return best;
+  }
 
   function parseIngredients(text) {
     var flags = [], t = text || "";
@@ -288,10 +315,10 @@
 
   function entry(d) {
     var e = state.days[d];
-    if (!e) e = state.days[d] = { k:{co:0,inf:0,dp:0}, nw:0, s:null, t:[], f:[], z:[], n:"" };
+    if (!e) e = state.days[d] = { k:{co:0,inf:0,dp:0}, nw:0, s:null, t:[], f:[], fa:{}, z:[], n:"" };
     if (!e.k) e.k = { co:0, inf:(e.c||0), dp:0 };
     if (e.nw == null) e.nw = 0;
-    if (!e.t) e.t = []; if (!e.f) e.f = []; if (!e.z) e.z = [];
+    if (!e.t) e.t = []; if (!e.f) e.f = []; if (!e.z) e.z = []; if (!e.fa) e.fa = {};
     return e;
   }
   function peek(d) { return state.days[d]; }
@@ -317,6 +344,35 @@
     return out;
   }
   function kindOf(t) { return FLAGS.indexOf(t)>=0 ? "ing" : foodByName(t) ? "food" : "tag"; }
+
+  // grams (or ml) of a given tag consumed on a day; null when nothing measurable applies
+  function dose(e, t) {
+    if (!e || !e.f || !e.f.length) return 0;
+    var total = 0, sawAny = false;
+    e.f.forEach(function (nm) {
+      var f = foodByName(nm);
+      if (!f || !f.sz || f.u === "piece") return;
+      var applies = (nm === t) || ((f.fl || []).indexOf(t) >= 0);
+      if (!applies) return;
+      sawAny = true;
+      total += ((e.fa && e.fa[nm]) || 1) * f.sz;
+    });
+    return sawAny ? Math.round(total) : 0;
+  }
+  function doseable(t) {
+    if (kindOf(t) === "tag") return false;
+    for (var i = 0; i < state.foods.length; i++) {
+      var f = state.foods[i];
+      if (!f.sz || f.u === "piece") continue;
+      if (f.n === t || (f.fl || []).indexOf(t) >= 0) return true;
+    }
+    return false;
+  }
+  function median(a) {
+    var b = a.slice().sort(function (x, y) { return x - y; });
+    var m = Math.floor(b.length / 2);
+    return b.length % 2 ? b[m] : (b[m-1] + b[m]) / 2;
+  }
   function allTags() {
     var out = [];
     GROUPS.forEach(function (g) { g.tags.forEach(function (t) { if (out.indexOf(t)<0) out.push(t); }); });
@@ -434,8 +490,22 @@
     state.foods.forEach(function (f) {
       h += '<button class="tag'+(e&&e.f&&e.f.indexOf(f.n)>=0?" on":"")+'" data-food="'+esc(f.n)+'">'+esc(f.n)+'</button>';
     });
-    h += '<button class="tag scan" data-newfood="1">+ Add a food</button></div>'
-       + (state.foods.length?'':'<div class="rowmeta" style="margin-top:9px">Add a product once and it lives here as a one-tap button.</div>')
+    h += '<button class="tag scan" data-newfood="1">+ Add a food</button></div>';
+    var chosen = (e && e.f) ? e.f : [];
+    if (chosen.length) {
+      h += '<div class="portions">';
+      chosen.forEach(function (nm) {
+        var f = foodByName(nm), p = (e.fa && e.fa[nm]) || 1;
+        var amt = (f && f.sz) ? (Math.round(p * f.sz * 10) / 10) + " " + (f.u === "piece" ? "pcs" : f.u) : "";
+        h += '<div class="prow"><span class="pname">'+esc(nm)
+           + (amt ? '<span class="pamt">'+esc(amt)+'</span>' : '<span class="pamt">no portion set</span>')+'</span>'
+           + '<button class="mini" data-portion="'+esc(nm)+'" data-pstep="-0.5">&minus;</button>'
+           + '<span class="tval">'+(p % 1 === 0 ? p : p.toFixed(1))+'</span>'
+           + '<button class="mini" data-portion="'+esc(nm)+'" data-pstep="0.5">+</button></div>';
+      });
+      h += '</div>';
+    }
+    h += (state.foods.length?'':'<div class="rowmeta" style="margin-top:9px">Add a product once and it lives here as a one-tap button.</div>')
        + '</div>';
 
     GROUPS.forEach(function (g) {
@@ -465,7 +535,8 @@
       h += '<div class="note">Nothing saved yet. On the packet, use your camera to select the '
          + 'ingredient text and copy it — then paste it in and the groups fill themselves.</div>';
     state.foods.forEach(function (f, i) {
-      h += '<div class="row"><div><div class="rowname">'+esc(f.n)+'</div>'
+      h += '<div class="row"><div><div class="rowname">'+esc(f.n)
+         + (f.sz ? ' <span class="kind">'+f.sz+' '+(f.u==="piece"?"pcs":f.u)+'</span>' : '')+'</div>'
          + '<div class="rowmeta">'+(f.fl||[]).map(esc).join(" · ")+'</div>'
          + '<div class="rowmeta" style="color:var(--faint)">'+esc((f.ing||[]).slice(0,10).join(", "))
          + ((f.ing||[]).length>10?"…":"")+'</div></div>'
@@ -474,7 +545,7 @@
     return h+'</div>';
   }
 
-  var draft = { name:"", flags:[], ingredients:[], raw:"" };
+  var draft = { name:"", flags:[], ingredients:[], raw:"", sz:null, u:"g" };
   function openSheet(stage, data) { sheet = sheetHTML(stage, data||draft); render(); }
   function closeSheet() { sheet = null; render(); }
 
@@ -528,6 +599,14 @@
         + '<div class="grph" style="margin-top:18px">Ingredients</div>'
         + '<textarea id="fing" placeholder="Scanned text lands here — fix anything mangled, then read it">'+esc(data.raw||"")+'</textarea>'
         + '<button class="btn" data-parse="1">Read the ingredients</button>'
+        + '<div class="grph" style="margin-top:18px">One portion</div>'
+        + '<div class="szrow">'
+        + '<input type="text" inputmode="decimal" id="fsz" value="'+(data.sz==null?"":data.sz)+'" placeholder="e.g. 400">'
+        + '<select id="fu">'
+        + UNITS.map(function(u){ return '<option value="'+u[0]+'"'+((data.u||"g")===u[0]?" selected":"")+'>'+u[1]+'</option>'; }).join("")
+        + '</select></div>'
+        + '<div class="rowmeta" style="margin-top:6px">What you normally eat at once. Grabbed from the '
+        + 'pack weight when the scan finds one — correct it if that is not your usual portion.</div>'
         + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
       FLAGS.forEach(function (fl) {
         h += '<button class="tag'+((data.flags||[]).indexOf(fl)>=0?" on":"")+'" data-flag="'+esc(fl)+'">'+esc(fl)+'</button>';
@@ -540,9 +619,12 @@
   }
 
   function grabDraft() {
-    var n = document.getElementById("fname"), g = document.getElementById("fing");
+    var n = document.getElementById("fname"), g = document.getElementById("fing"),
+        z = document.getElementById("fsz"), u = document.getElementById("fu");
     if (n) draft.name = n.value;
     if (g) draft.raw = g.value;
+    if (z) draft.sz = z.value ? parseFloat(z.value) : null;
+    if (u) draft.u = u.value;
   }
 
   // ---------- reading a label ----------
@@ -665,6 +747,8 @@
     var r = parseIngredients(clean);
     draft.flags = r.flags;
     draft.ingredients = r.parts;
+    var sz = findSize(clean);
+    if (sz && !draft.sz) { draft.sz = sz.sz; draft.u = sz.u; }
     openSheet("food", draft);
   }
 
@@ -679,7 +763,10 @@
     [0,1,2,3].forEach(function (l) {
       h += '<button class="chip'+(l===lag?" on":"")+'" data-lag="'+l+'">'+(l===0?"Same day":l+"d before")+'</button>';
     });
-    h += '</div>' + laserPanel();
+    h += '</div><div class="chips">'
+       + '<button class="chip'+(mode==="presence"?" on":"")+'" data-mode="presence">Ate it or not</button>'
+       + '<button class="chip'+(mode==="amount"?" on":"")+'" data-mode="amount">How much</button>'
+       + '</div>' + laserPanel();
 
     var res = analyse(lag, measure);
     if (!res.length) {
@@ -694,8 +781,13 @@
         var k = kindOf(r.tag), cls = r.delta>0?"up":r.delta<0?"down":"";
         h += '<div class="row"><div><div class="rowname">'
            + (k==="ing"?'<span class="kind ing">ingredient</span>':k==="food"?'<span class="kind">product</span>':'')
-           + esc(r.tag)+'</div><div class="rowmeta">'+r.a.toFixed(1)+' with ('+r.na+'d) · '
-           + r.b.toFixed(1)+' without ('+r.nb+'d)</div></div>'
+           + esc(r.tag)
+           + (r.byAmount ? '<span class="kind" style="margin-left:7px;margin-right:0">by amount</span>' : '')
+           + '</div><div class="rowmeta">'
+           + (r.byAmount
+               ? r.a.toFixed(1)+' on heavier days, ~'+r.hiAvg+'g ('+r.na+'d) · '+r.b.toFixed(1)+' on lighter days ('+r.nb+'d)'
+               : r.a.toFixed(1)+' with ('+r.na+'d) · '+r.b.toFixed(1)+' without ('+r.nb+'d)')
+           + '</div></div>'
            + '<div class="delta '+cls+'">'+(r.delta>0?"+":"")+r.delta.toFixed(1)+'</div></div>';
       });
     }
@@ -730,17 +822,32 @@
   function analyse(l, m) {
     var out = [], days = Object.keys(state.days), cache = {};
     days.forEach(function (d) { cache[d] = effective(state.days[d]); });
+
     allTags().forEach(function (t) {
-      var A = [], B = [];
+      var byAmount = (mode === "amount") && doseable(t);
+      var pairs = [];
       days.forEach(function (d) {
         var v = metric(state.days[d], m); if (v == null) return;
         var sd = shift(d, -l), src = state.days[sd];
         if (!touched(src)) return;
-        ((cache[sd]||[]).indexOf(t) >= 0 ? A : B).push(v);
+        pairs.push({ v: v, on: (cache[sd]||[]).indexOf(t) >= 0, g: byAmount ? dose(src, t) : 0 });
       });
+      if (pairs.length < 6) return;
+
+      var A = [], B = [], cut = null;
+      if (byAmount) {
+        cut = median(pairs.map(function (p) { return p.g; }));
+        // a median of zero means most days have none — fall back to any-vs-none
+        if (cut <= 0) cut = 0;
+        pairs.forEach(function (p) { (p.g > cut ? A : B).push(p.v); });
+      } else {
+        pairs.forEach(function (p) { (p.on ? A : B).push(p.v); });
+      }
       if (A.length < 3 || B.length < 3) return;
       var a = mean(A), b = mean(B);
-      out.push({ tag:t, a:a, b:b, delta:a-b, na:A.length, nb:B.length });
+      out.push({ tag:t, a:a, b:b, delta:a-b, na:A.length, nb:B.length,
+                 byAmount: byAmount, cut: cut,
+                 hiAvg: byAmount ? Math.round(mean(pairs.filter(function(p){return p.g>cut;}).map(function(p){return p.g;}))) : null });
     });
     out.sort(function (x,y) { return Math.abs(y.delta) - Math.abs(x.delta); });
     return out;
@@ -801,12 +908,17 @@
 
   function csv() {
     var tags = allTags();
-    var rows = ["date,new_today,total,clogged,inflamed,deep,skinfeel,zones,"+tags.map(function(t){return '"'+t+'"';}).join(",")+",notes"];
+    var doseCols = tags.filter(doseable);
+    var rows = ["date,new_today,total,clogged,inflamed,deep,skinfeel,zones,"
+      + tags.map(function(t){return '"'+t+'"';}).join(",")
+      + (doseCols.length ? "," + doseCols.map(function(t){return '"'+t+' (g)"';}).join(",") : "")
+      + ",notes"];
     Object.keys(state.days).sort().forEach(function (d) {
       var e = state.days[d], k = e.k||{}, eff = effective(e);
       var cells = [d, e.nw==null?"":e.nw, totalOf(e)==null?"":totalOf(e), k.co==null?"":k.co,
         k.inf==null?"":k.inf, k.dp==null?"":k.dp, e.s==null?"":e.s, '"'+(e.z||[]).join("; ")+'"'];
       tags.forEach(function (t) { cells.push(eff.indexOf(t)>=0?1:0); });
+      doseCols.forEach(function (t) { cells.push(dose(e, t)); });
       cells.push('"'+String(e.n||"").replace(/"/g,'""')+'"');
       rows.push(cells.join(","));
     });
@@ -848,7 +960,7 @@
         state.routine = { am: am?am.value.trim():"", pm: pm?pm.value.trim():"", notes: no?no.value.trim():"" };
         sheet = null; save(); return render();
       }
-      if (d.newfood) { draft = {name:"",flags:[],ingredients:[],raw:""}; return openSheet("food"); }
+      if (d.newfood) { draft = {name:"",flags:[],ingredients:[],raw:"",sz:null,u:"g"}; return openSheet("food"); }
       if (d.cam) return pickImage(true);
       if (d.lib) return pickImage(false);
       if (d.parse) {
@@ -869,9 +981,10 @@
         if (!name) { var el = document.getElementById("fname"); el && el.focus(); return; }
         if (!draft.ingredients.length && draft.raw) draft.ingredients = parseIngredients(draft.raw).parts;
         var ex = foodByName(name);
-        if (ex) { ex.ing = draft.ingredients; ex.fl = draft.flags; }
-        else state.foods.push({ n:name, ing:draft.ingredients, fl:draft.flags });
-        var e0 = entry(sel); if (e0.f.indexOf(name)<0) e0.f.push(name);
+        if (ex) { ex.ing = draft.ingredients; ex.fl = draft.flags; ex.sz = draft.sz; ex.u = draft.u || "g"; }
+        else state.foods.push({ n:name, ing:draft.ingredients, fl:draft.flags, sz:draft.sz, u:draft.u||"g" });
+        var e0 = entry(sel);
+        if (e0.f.indexOf(name)<0) { e0.f.push(name); e0.fa[name] = 1; }
         sheet = null; save(); return render();
       }
       if (d.del) {
@@ -886,6 +999,7 @@
       if (d.lag) { lag = +d.lag; return render(); }
       if (d.lag === "0") { lag = 0; return render(); }
       if (d.measure) { measure = d.measure; return render(); }
+      if (d.mode) { mode = d.mode; return render(); }
       if (d.type) { var e1 = entry(sel);
         e1.k[d.type] = Math.max(0,(e1.k[d.type]||0)+(+d.step)); save(); return render(); }
       if (d.new) { var en = entry(sel); en.nw = Math.max(0,(en.nw||0)+(+d.new)); save(); return render(); }
@@ -893,7 +1007,15 @@
       if (d.zone) { var e6 = entry(sel), iz = e6.z.indexOf(d.zone);
         if (iz>=0) e6.z.splice(iz,1); else e6.z.push(d.zone); save(); return render(); }
       if (d.food) { var e3 = entry(sel), i1 = e3.f.indexOf(d.food);
-        if (i1>=0) e3.f.splice(i1,1); else e3.f.push(d.food); save(); return render(); }
+        if (i1>=0) { e3.f.splice(i1,1); delete e3.fa[d.food]; }
+        else { e3.f.push(d.food); if (!e3.fa[d.food]) e3.fa[d.food] = 1; }
+        save(); return render(); }
+      if (d.portion) {
+        var e7 = entry(sel), cur = e7.fa[d.portion] || 1;
+        cur = Math.round((cur + (+d.pstep)) * 10) / 10;
+        if (cur < 0.5) cur = 0.5;
+        e7.fa[d.portion] = cur; save(); return render();
+      }
       if (d.tag) { var e4 = entry(sel), i2 = e4.t.indexOf(d.tag);
         if (i2>=0) e4.t.splice(i2,1); else e4.t.push(d.tag); save(); return render(); }
       if (d.add) {
