@@ -29,24 +29,51 @@
   .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px; }
 
   .strip-shell { position: sticky; top: 0; z-index: 20;
-    background: linear-gradient(var(--ink) 78%, rgba(18,22,42,0)); padding: 14px 0 18px; }
-  .strip { display: flex; align-items: flex-end; gap: 3px; overflow-x: auto; padding: 0 16px 6px; }
-  .strip::-webkit-scrollbar { display: none; }
-  .day { flex: 0 0 auto; width: 26px; display: flex; flex-direction: column; align-items: center;
-    gap: 5px; background: none; border: 0; padding: 0; cursor: pointer;
+    background: linear-gradient(var(--ink) 84%, rgba(18,22,42,0)); padding: 12px 16px 16px; }
+  .weekhead { display: flex; align-items: baseline; justify-content: space-between;
+    margin: 0 0 8px; }
+  .wmonth { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--paper-dim); }
+  .wcal { background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--mark);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .12em; text-transform: uppercase; text-decoration: underline; }
+  .week { display: flex; align-items: stretch; gap: 2px; }
+  .wdays { display: flex; flex: 1; gap: 2px; }
+  .warr { flex: 0 0 26px; background: none; border: 0; color: var(--paper-dim);
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 0; }
+  .warr.off { color: var(--ink-3); }
+  .day { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; background: none; border: 1px solid transparent; border-radius: 12px;
+    padding: 6px 0 5px; cursor: pointer;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .bar-slot { height: 58px; width: 100%; display: flex; flex-direction: column;
+  .day.sel { background: var(--ink-2); border-color: var(--paper); }
+  .day.now .dnum { color: var(--mark); }
+  .day.fut { opacity: .3; }
+  .bar-slot { height: 48px; width: 100%; display: flex; flex-direction: column;
     justify-content: flex-end; align-items: center; }
-  .seg { width: 12px; }
+  .seg { width: 11px; }
   .seg.dp { background: var(--flare); border-radius: 3px 3px 0 0; }
   .seg.inf { background: #C9707F; }
   .seg.co { background: #6E6FA8; border-radius: 0 0 1px 1px; }
   .seg.none { background: var(--ink-3); height: 3px; border-radius: 2px; }
   .seg.zero { background: var(--calm); height: 4px; border-radius: 2px; }
-  .day.sel .bar-slot { outline: 2px solid var(--paper); outline-offset: 2px; border-radius: 4px; }
-  .dnum { font-size: 10px; color: var(--paper-dim); }
-  .day.sel .dnum { color: var(--paper); }
-  .dow { font-size: 8px; color: var(--faint); text-transform: uppercase; }
+  .dow { font-size: 8.5px; color: var(--faint); }
+  .dnum { font-size: 11px; color: var(--paper-dim); }
+  .day.sel .dnum, .day.sel .dow { color: var(--paper); }
+
+  .calhead { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
+  .calm { font-family: ui-serif, "New York", Georgia, serif; font-size: 17px; }
+  .calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .calw { text-align: center; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 8.5px; color: var(--faint); padding-bottom: 2px; }
+  .calc { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--ink-2); color: var(--paper); cursor: pointer;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; padding: 0; }
+  .calc.now { outline: 1px solid var(--mark); outline-offset: 1px; }
+  .calc.sel { border-width: 2px; border-color: var(--paper); }
+  .calc.fut { opacity: .25; }
+  .calt { font-size: 8px; color: var(--paper); opacity: .8; }
 
   .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 16px; }
   .date { font-family: ui-serif, "New York", Georgia, serif; font-size: 26px; font-weight: 500; }
@@ -145,6 +172,7 @@
   .szrow select { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
     color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; min-width: 90px; }
   .quick { display: flex; gap: 7px; margin: -6px 0 16px; flex-wrap: wrap; }
+  .qb.on { background: var(--mark); border-color: var(--mark); color: #2A2208; }
   .qb { padding: 8px 13px; border-radius: 999px; background: var(--ink-3);
     border: 1px solid var(--line); color: var(--paper-dim); cursor: pointer;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
@@ -155,6 +183,10 @@
     letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
   select.wide { width: 100%; background: var(--ink-2); border: 1px solid var(--line);
     border-radius: 14px; color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; }
+  .btnlink { display: block; width: 100%; margin-top: 8px; padding: 8px 0; background: none;
+    border: 0; color: var(--paper-dim); cursor: pointer; text-align: left;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase; text-decoration: underline; }
   .btn.danger { border-color: var(--flare); color: var(--flare); background: none; }
   .irow { display: flex; align-items: center; gap: 8px; padding: 6px 0;
     border-bottom: 1px solid var(--ink-3); }
@@ -204,8 +236,9 @@
 <script>
 (function () {
   var KEY = "skinlog:v2";
-  var state = { days: {}, custom: [], foods: [], presets: [], routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
-  var view = "today", sel = todayStr(), lag = 1, measure = "nw", mode = "presence", sheet = null, saveTimer = null;
+  var state = { days: {}, custom: [], foods: [], presets: [], carry: null, routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
+  var view = "today", sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
+      sheet = null, saveTimer = null, calMonth = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
   var store = {
@@ -364,6 +397,128 @@
     return { flags: flags.filter(function (f, i, a) { return a.indexOf(f) === i; }), parts: parts };
   }
 
+  // ---- Open Food Facts: free, no key, gives real per-ingredient percentages
+  var OFF_URL = "https://world.openfoodfacts.org/api/v2/product/";
+  var OFF_FIELDS = "product_name,brands,quantity,product_quantity,product_quantity_unit,serving_quantity,"
+    + "ingredients_text,ingredients,ingredients_tags,allergens_tags,additives_tags,nova_group,"
+    + "ingredients_from_palm_oil_n,nutriments";
+
+  var ALLERGEN_MAP = {
+    "en:milk": "Dairy", "en:gluten": "Gluten / wheat", "en:eggs": "Egg",
+    "en:soybeans": "Soy", "en:nuts": "Nuts", "en:peanuts": "Nuts",
+    "en:fish": "Fish / seafood", "en:crustaceans": "Fish / seafood", "en:molluscs": "Fish / seafood"
+  };
+
+  // taxonomy ids are normalised English, so the same dictionary works far better on them
+  function idsToText(tags) {
+    return (tags || []).join(" ").replace(/[a-z]{2}:/g, " ").replace(/-/g, " ");
+  }
+
+  function flagsFromOFF(pr) {
+    var out = [];
+    var add = function (f) { if (f && out.indexOf(f) < 0) out.push(f); };
+    flagsFor(idsToText(pr.ingredients_tags)).forEach(add);
+    (pr.allergens_tags || []).forEach(function (a) { add(ALLERGEN_MAP[a]); });
+    if (pr.nova_group === 4) add("Highly processed");
+    if ((pr.additives_tags || []).length) add("Additives / preservatives");
+    if (pr.ingredients_from_palm_oil_n > 0) add("Palm oil");
+    var n = pr.nutriments || {};
+    if (n["added-sugars_100g"] > 0) add("Added sugar");
+    if (n.sugars_100g >= 15) add("High sugar");
+    return out;
+  }
+
+  // flatten to leaves — a parent's percentage is just the sum of its children,
+  // and attributing a whole "seasoning packet" to every group inside it overstates each one
+  function leaves(ing, out) {
+    if (ing.ingredients && ing.ingredients.length) {
+      ing.ingredients.forEach(function (c) { leaves(c, out); });
+    } else {
+      out.push(ing);
+    }
+    return out;
+  }
+
+  function itemsFromOFF(pr) {
+    var list = pr.ingredients || [];
+    if (!list.length) return null;
+    var flat = [];
+    list.forEach(function (ing) { leaves(ing, flat); });
+    if (!flat.length) return null;
+    return flat.map(function (ing) {
+      var pct = ing.percent != null ? ing.percent
+              : (ing.percent_estimate != null ? Math.round(ing.percent_estimate * 100) / 100 : null);
+      return { n: ing.text || (ing.id || "").replace(/^[a-z]{2}:/, "").replace(/-/g, " "),
+               p: pct, est: ing.percent == null,
+               fl: flagsFor((ing.text || "") + " " + idsToText([ing.id])) };
+    });
+  }
+
+  function lookupBarcode(code) {
+    code = String(code || "").replace(/\D/g, "");
+    if (code.length < 8) { ocrStatus("That does not look like a barcode — 8 to 14 digits."); return; }
+    ocrStatus("Looking it up\u2026");
+
+    var direct = OFF_URL + code + ".json?fields=" + OFF_FIELDS;
+    var attempt = state.reader
+      ? fetch(state.reader, { method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ barcode: code, fields: OFF_FIELDS }) })
+      : fetch(direct, { headers: { "Accept": "application/json" } });
+
+    attempt.then(function (r) { return r.json(); })
+      .then(function (j) { applyOFF(j, code); })
+      .catch(function () {
+        // direct call blocked or offline — try the worker if there is one, else say so plainly
+        if (!state.reader) {
+          ocrStatus("Couldn't reach the food database. Check your connection, or type the ingredients in below.");
+          return;
+        }
+        ocrStatus("Couldn't reach your reader. Check the URL in Log \u2192 Label reader.");
+      });
+  }
+
+  function applyOFF(j, code) {
+    if (!j || j.status === 0 || !j.product) {
+      ocrStatus("Not in the database. It is crowd-sourced, so newer or local products are often missing — "
+        + "paste the ingredients in below instead.");
+      return;
+    }
+    var pr = j.product;
+    var name = [pr.brands ? String(pr.brands).split(",")[0].trim() : "", pr.product_name]
+                 .filter(Boolean).join(" ").trim();
+    if (name && !draft.name) draft.name = name;
+    draft.barcode = code;
+
+    if (pr.product_quantity && !draft.sz) {
+      draft.sz = Math.round(parseFloat(pr.product_quantity));
+      draft.u = (pr.product_quantity_unit === "ml" || pr.product_quantity_unit === "l") ? "ml" : "g";
+    } else if (pr.quantity && !draft.sz) {
+      var q = findSize(pr.quantity);
+      if (q) { draft.sz = q.sz; draft.u = q.u; }
+    }
+    draft.serving = pr.serving_quantity ? Math.round(parseFloat(pr.serving_quantity)) : null;
+
+    draft.raw = pr.ingredients_text || "";
+    draft.rawFull = draft.raw;
+    draft.foundSection = true;
+
+    var items = itemsFromOFF(pr);
+    if (items && items.length) {
+      draft.items = items;
+      draft.ingredients = items.map(function (it) { return it.n; });
+    } else if (draft.raw) {
+      rebuildDraft();
+    }
+
+    var fl = flagsFromOFF(pr);
+    (draft.items || []).forEach(function (it) {
+      (it.fl || []).forEach(function (f) { if (fl.indexOf(f) < 0) fl.push(f); });
+    });
+    draft.flags = fl;
+    draft.fromDB = true;
+    openSheet("food", draft);
+  }
+
   var LASER = "Laser session (face)";
 
   var GROUPS = [
@@ -385,6 +540,18 @@
   function pad(n) { return n < 10 ? "0"+n : ""+n; }
   function shift(s, n) { var p = s.split("-"); var d = new Date(+p[0],+p[1]-1,+p[2]); d.setDate(d.getDate()+n); return iso(d); }
   function parseD(s) { var p = s.split("-"); return new Date(+p[0],+p[1]-1,+p[2]); }
+  function weekStart(dstr) {
+    var d = parseD(dstr);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // Monday
+    return iso(d);
+  }
+  function monthKey(dstr) { var p = dstr.split("-"); return p[0] + "-" + p[1]; }
+  function isFuture(dstr) { return dstr > todayStr(); }
+  function firstLogged() {
+    var ks = Object.keys(state.days).sort();
+    return ks.length ? ks[0] : todayStr();
+  }
+
   function diffDays(a, b) { return Math.round((parseD(b) - parseD(a)) / 86400000); }
   function longDate(s) {
     if (s === todayStr()) return "Today";
@@ -399,7 +566,8 @@
         state.routine = v.routine || { am:"", pm:"", notes:"" };
         state.backedUp = v.backedUp || null;
         state.reader = v.reader || "";
-        state.presets = v.presets || []; } catch (e) {} }
+        state.presets = v.presets || [];
+        state.carry = v.carry || null; } catch (e) {} }
       render();
     }).catch(render);
   }
@@ -409,6 +577,10 @@
     saveTimer = setTimeout(function () {
       try { store.set(JSON.stringify(state)); } catch (e) {}
     }, 250);
+  }
+  function saveNow() {
+    clearTimeout(saveTimer);
+    try { store.set(JSON.stringify(state)); } catch (e) {}
   }
   function flash() { var el = document.querySelector(".saved"); if (!el) return;
     el.classList.add("on"); clearTimeout(el._t);
@@ -536,39 +708,105 @@
              : view==="patterns" ? vPatterns() : vLog();
     document.getElementById("app").innerHTML = banner() + html + nav() + (sheet||"");
     bind();
-    if (view==="today") { var s = document.querySelector(".day.sel"); if (s) s.scrollIntoView({block:"nearest",inline:"center"}); }
+
   }
 
   function strip() {
-    var tot = [];
-    for (var i=29;i>=0;i--) { var t = totalOf(peek(shift(todayStr(),-i))); tot.push(t||0); }
-    var max = Math.max(4, Math.max.apply(null, tot));
-    var h = '<div class="strip-shell"><div class="strip">';
-    for (var j=29;j>=0;j--) {
-      var dd = shift(todayStr(),-j), e = peek(dd), t = totalOf(e), dt = parseD(dd);
-      h += '<button class="day'+(dd===sel?" sel":"")+'" data-day="'+dd+'"><span class="bar-slot">';
-      if (t == null) h += '<span class="seg none"></span>';
-      else if (t === 0) h += '<span class="seg zero"></span>';
-      else if (e.k) { ["dp","inf","co"].forEach(function (k) { var v = e.k[k]||0; if (!v) return;
-          h += '<span class="seg '+k+'" style="height:'+Math.max(2,Math.round((v/max)*54))+'px"></span>'; }); }
-      else h += '<span class="seg inf" style="height:'+Math.max(2,Math.round((t/max)*54))+'px"></span>';
-      h += '</span><span class="dnum">'+dt.getDate()+'</span><span class="dow">'
-         + dt.toLocaleDateString(undefined,{weekday:"short"}).slice(0,1)+'</span></button>';
+    var ws = weekStart(sel);
+    var days = [], i;
+    for (i = 0; i < 7; i++) days.push(shift(ws, i));
+
+    // scale bars against the busiest day in this week, with a sane floor
+    var max = 4;
+    days.forEach(function (d) { var t = totalOf(peek(d)); if (t && t > max) max = t; });
+
+    var mA = parseD(days[0]), mB = parseD(days[6]);
+    var monthLabel;
+    if (mA.getMonth() === mB.getMonth()) {
+      monthLabel = mA.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    } else if (mA.getFullYear() === mB.getFullYear()) {
+      monthLabel = mA.toLocaleDateString(undefined, { month: "short" }) + " \u2013 "
+                 + mB.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+    } else {
+      monthLabel = mA.toLocaleDateString(undefined, { month: "short", year: "numeric" }) + " \u2013 "
+                 + mB.toLocaleDateString(undefined, { month: "short", year: "numeric" });
     }
-    return h+'</div></div>';
+    var canForward = !isFuture(shift(ws, 7));
+
+    var h = '<div class="strip-shell"><div class="weekhead">'
+      + '<span class="wmonth">' + esc(monthLabel) + '</span>'
+      + '<button class="wcal" data-calendar="1">All days</button></div>'
+      + '<div class="week">'
+      + '<button class="warr" data-week="-1" aria-label="Previous week">&lsaquo;</button>'
+      + '<div class="wdays">';
+
+    days.forEach(function (d) {
+      var e = peek(d), t = totalOf(e), dt = parseD(d);
+      var fut = isFuture(d);
+      var cls = "day" + (d === sel ? " sel" : "") + (d === todayStr() ? " now" : "") + (fut ? " fut" : "");
+      h += '<button class="' + cls + '"' + (fut ? " disabled" : ' data-day="' + d + '"') + '>'
+         + '<span class="bar-slot">';
+      if (fut || t == null) h += '<span class="seg none"></span>';
+      else if (t === 0) h += '<span class="seg zero"></span>';
+      else if (e.k) {
+        ["dp", "inf", "co"].forEach(function (k) {
+          var v = e.k[k] || 0; if (!v) return;
+          h += '<span class="seg ' + k + '" style="height:' + Math.max(2, Math.round((v / max) * 46)) + 'px"></span>';
+        });
+      } else h += '<span class="seg inf" style="height:' + Math.max(2, Math.round((t / max) * 46)) + 'px"></span>';
+      h += '</span><span class="dow">'
+         + dt.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 1).toUpperCase() + '</span>'
+         + '<span class="dnum">' + dt.getDate() + '</span></button>';
+    });
+
+    h += '</div><button class="warr' + (canForward ? '' : ' off') + '"'
+       + (canForward ? ' data-week="1"' : ' disabled') + ' aria-label="Next week">&rsaquo;</button>'
+       + '</div></div>';
+    return h;
+  }
+
+  var carriedFrom = null;
+
+  // a "save for tomorrow" drops itself onto the next day you open, once
+  function maybeCarry() {
+    carriedFrom = null;
+    var c = state.carry;
+    if (!c || !c.d) return;
+    if (sel < c.d || isFuture(sel)) return;
+    if (touched(peek(sel))) return;          // never overwrite a day you already started
+    var tgt = entry(sel);
+    (c.t || []).forEach(function (x) { if (tgt.t.indexOf(x) < 0) tgt.t.push(x); });
+    (c.f || []).forEach(function (x) {
+      if (!foodByName(x)) return;            // food was deleted in the meantime
+      if (tgt.f.indexOf(x) < 0) tgt.f.push(x);
+      if (tgt.fa[x] == null) tgt.fa[x] = (c.fa && c.fa[x]) || 1;
+    });
+    carriedFrom = c.from || null;
+    state.carry = null;
+    saveNow();   // consuming a carry must stick even if the app is closed immediately
   }
 
   function vToday() {
+    maybeCarry();
     var e = peek(sel), k = e && e.k ? e.k : { co:0, inf:(e&&e.c)||0, dp:0 };
     var tot = (k.co||0)+(k.inf||0)+(k.dp||0);
     var h = strip() + '<div class="wrap">';
     h += '<div class="head"><span class="date">'+longDate(sel)+'</span><span class="saved">Saved</span></div>';
     var prev = peek(shift(sel, -1));
     var prevHas = prev && ((prev.t && prev.t.length) || (prev.f && prev.f.length));
+    var armed = state.carry && state.carry.d === shift(sel, 1);
+    var curHas = e && ((e.t && e.t.length) || (e.f && e.f.length));
     h += '<div class="quick">'
        + (prevHas ? '<button class="qb" data-copyprev="1">Copy yesterday</button>' : '')
+       + (armed
+            ? '<button class="qb on" data-uncarry="1">Carrying to tomorrow &#10005;</button>'
+            : (curHas ? '<button class="qb" data-carry="1">Save for tomorrow</button>' : ''))
        + '<button class="qb" data-presets="1">Presets'+(state.presets.length?" ("+state.presets.length+")":"")+'</button>'
-       + '</div>';
+       + '</div>'
+       + (carriedFrom
+            ? '<div class="rowmeta" style="margin:-10px 0 14px">Carried over from '
+              + esc(longDate(carriedFrom)) + '. Adjust anything that is different today.</div>'
+            : '');
     h += '<div class="total"><span class="cnum">'+tot+'</span><span class="clab">Spots today</span></div>';
     h += '<div class="types">';
     TYPES.forEach(function (t) {
@@ -662,7 +900,9 @@
 
     h += '<div class="grp"><div class="grph">Yours</div><div class="tags">';
     state.custom.forEach(function (t) { h += tagBtn(t, e&&e.t); });
-    h += '<button class="tag add" data-add="1">+ Add your own</button></div></div>';
+    h += '<button class="tag add" data-add="1">+ Add your own</button>'
+       + (state.custom.length ? '<button class="tag add" data-managetags="1">Edit these</button>' : '')
+       + '</div></div>';
 
     h += '<div class="grp"><div class="grph">Anything else</div>'
        + '<textarea id="notes" placeholder="Late night, new detergent, stressful week…">'+esc((e&&e.n)||"")+'</textarea></div>';
@@ -723,7 +963,7 @@
     return h+'</div>';
   }
 
-  var draft = { name:"", flags:[], ingredients:[], items:[], raw:"", rawFull:"", sz:null, u:"g", editing:null };
+  var draft = { name:"", flags:[], ingredients:[], items:[], raw:"", rawFull:"", sz:null, u:"g", barcode:"", editing:null };
   var shot = null, cropBox = null, cropView = null;
   function openSheet(stage, data) { sheet = sheetHTML(stage, data||draft); render(); }
   function closeSheet() { sheet = null; render(); }
@@ -761,6 +1001,73 @@
         + '<button class="btn go" data-docrop="1">Read this bit</button>'
         + '<button class="btn" data-cropall="1">Read the whole photo</button>'
         + '<button class="btn" data-close="1">Cancel</button>';
+    } else if (stage === "calendar") {
+      var mk = calMonth || monthKey(sel);
+      var yy = parseInt(mk.split("-")[0], 10), mm = parseInt(mk.split("-")[1], 10);
+      var first = yy + "-" + pad(mm) + "-01";
+      var dim = new Date(yy, mm, 0).getDate();
+      var lead = (parseD(first).getDay() + 6) % 7;
+      var label = parseD(first).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      var prevM = mm === 1 ? (yy-1) + "-12" : yy + "-" + pad(mm-1);
+      var nextM = mm === 12 ? (yy+1) + "-01" : yy + "-" + pad(mm+1);
+      var canNext = nextM <= monthKey(todayStr());
+      var earliest = monthKey(firstLogged());
+      var canPrev = prevM >= (earliest < monthKey(todayStr()) ? earliest : prevM);
+
+      // busiest day this month sets the colour scale
+      var peak = 1;
+      for (var dd = 1; dd <= dim; dd++) {
+        var tt = totalOf(peek(yy + "-" + pad(mm) + "-" + pad(dd)));
+        if (tt && tt > peak) peak = tt;
+      }
+
+      h += '<h2 class="sec">All days</h2>'
+        + '<div class="sub">Every day you have logged. Tap one to open it.</div>'
+        + '<div class="calhead">'
+        + '<button class="warr" data-month="' + prevM + '">&lsaquo;</button>'
+        + '<span class="calm">' + esc(label) + '</span>'
+        + '<button class="warr' + (canNext ? '' : ' off') + '"'
+        + (canNext ? ' data-month="' + nextM + '"' : ' disabled') + '>&rsaquo;</button>'
+        + '</div><div class="calgrid">';
+
+      ["M","T","W","T","F","S","S"].forEach(function (w) { h += '<div class="calw">' + w + '</div>'; });
+      for (var b = 0; b < lead; b++) h += '<div></div>';
+      for (var day = 1; day <= dim; day++) {
+        var ds = yy + "-" + pad(mm) + "-" + pad(day);
+        var e2 = peek(ds), t2 = totalOf(e2), fu = isFuture(ds);
+        var cls2 = "calc";
+        if (ds === sel) cls2 += " sel";
+        if (ds === todayStr()) cls2 += " now";
+        if (fu) cls2 += " fut";
+        var style = "";
+        if (!fu && t2 != null) {
+          if (t2 === 0) style = 'background:rgba(79,191,168,.28);border-color:var(--calm)';
+          else style = 'background:rgba(228,115,126,' + (0.16 + 0.62 * Math.min(1, t2 / peak)).toFixed(2) + ');border-color:var(--flare)';
+        }
+        h += '<button class="' + cls2 + '"' + (fu ? " disabled" : ' data-pick="' + ds + '"')
+           + (style ? ' style="' + style + '"' : '') + '>' + day
+           + (!fu && t2 != null ? '<span class="calt">' + t2 + '</span>' : '') + '</button>';
+      }
+      h += '</div>'
+        + '<div class="rowmeta" style="margin-top:12px">Green means a clear day. Deeper red means more '
+        + 'spots. Blank means nothing logged.</div>'
+        + '<button class="btn" data-close="1">Close</button>';
+    } else if (stage === "tags") {
+      h += '<h2 class="sec">Your own tags</h2>'
+        + '<div class="sub">The ones you added yourself. Renaming keeps your history intact; '
+        + 'deleting removes the tag from every day it was logged on.</div>';
+      if (!state.custom.length) {
+        h += '<div class="note">None yet. Add one from the Today screen with <b>+ Add your own</b>.</div>';
+      }
+      state.custom.forEach(function (tg, i) {
+        var used = 0;
+        for (var dd in state.days) { var de = state.days[dd]; if (de.t && de.t.indexOf(tg) >= 0) used++; }
+        h += '<div class="row"><div><div class="rowname">'+esc(tg)+'</div>'
+          + '<div class="rowmeta">'+(used ? "logged on "+used+" day"+(used===1?"":"s") : "never logged")+'</div></div>'
+          + '<div class="fbtns"><button class="tag" data-rentag="'+i+'">Rename</button>'
+          + '<button class="tag" data-deltag="'+i+'">Delete</button></div></div>';
+      });
+      h += '<button class="btn" data-close="1">Close</button>';
     } else if (stage === "presets") {
       h += '<h2 class="sec">Presets</h2>'
         + '<div class="sub">A saved set of foods and tags you can drop onto any day. Good for the meals '
@@ -790,33 +1097,54 @@
         + '<button class="btn go" data-saveroutine="1">Save</button>'
         + '<button class="btn" data-close="1">Cancel</button>';
     } else {
-      h += '<h2 class="sec">Add a food</h2>'
-        + '<div class="sub">Photograph the ingredient list, or paste it in. Get the packet flat, fill '
-        + 'the frame with the small print, and keep your shadow off it.</div>'
+      h += '<h2 class="sec">'+(data.editing?"Edit food":"Add a food")+'</h2>'
         + '<input type="text" id="fname" value="'+esc(data.name||"")+'" placeholder="Name it — e.g. protein bar">'
-        + '<input type="file" accept="image/*" capture="environment" id="cam" style="display:none">'
-        + '<input type="file" accept="image/*" id="lib" style="display:none">'
-        + '<button class="btn go" data-cam="1">Scan with camera</button>'
-        + '<button class="btn" data-lib="1">Choose a photo</button>'
-        + '<div id="ocr" class="ocr"></div>'
-        + '<div class="grph" style="margin-top:18px">Ingredients</div>'
-        + '<textarea id="fing" placeholder="Scanned text lands here — fix anything mangled, then read it">'+esc(data.raw||"")+'</textarea>'
-        + '<button class="btn" data-parse="1">Read the ingredients</button>'
-        + '<div class="grph" style="margin-top:18px">One portion</div>'
+
+        + '<div class="grp" style="margin-top:18px"><div class="grph">Barcode</div>'
         + '<div class="szrow">'
-        + '<input type="text" inputmode="decimal" id="fsz" value="'+(data.sz==null?"":data.sz)+'" placeholder="e.g. 400">'
-        + '<select id="fu">'
-        + UNITS.map(function(u){ return '<option value="'+u[0]+'"'+((data.u||"g")===u[0]?" selected":"")+'>'+u[1]+'</option>'; }).join("")
-        + '</select></div>'
-        + '<div class="rowmeta" style="margin-top:6px">What you normally eat at once. Grabbed from the '
-        + 'pack weight when the scan finds one — correct it if that is not your usual portion.</div>'
-        + '<div class="grp" style="margin-top:18px"><div class="grph">Category</div>'
+        + '<input type="text" inputmode="numeric" id="fbc" value="'+esc(data.barcode||"")+'" placeholder="13 digits from the pack">'
+        + '<button class="btn" style="margin:0;width:auto;padding:12px 16px" data-lookup="1">Look up</button>'
+        + '</div>'
+        + (hasBarcodeScanner()
+             ? '<input type="file" accept="image/*" capture="environment" id="bcshot" style="display:none">'
+               + '<button class="btn" data-bcscan="1">Scan the barcode</button>'
+             : '')
+        + '<div class="rowmeta" style="margin-top:6px">The accurate route — pulls the real ingredient '
+        + 'list, percentages and pack weight from the open product database.</div></div>'
+
+        + '<div id="ocr" class="ocr"></div>'
+
+        + (data.fromDB ? '<div class="note" style="border-color:var(--calm);margin:0 0 14px">'
+             + 'Found in the product database.'
+             + (data.serving && data.sz && data.serving !== data.sz
+                 ? ' Pack is '+data.sz+data.u+'; one stated serving is '+data.serving+data.u+'.' : '')
+             + '</div>' : '')
+
+        + '<div class="grp"><div class="grph">Category</div>'
         + '<select id="fcat" class="wide">'
         + CATS.map(function (c) {
             var cur = data.catTouched && data.cat ? data.cat : guessCat(data.flags, data.u);
             return '<option value="'+esc(c)+'"'+(cur===c?" selected":"")+'>'+esc(c)+'</option>';
           }).join("")
         + '</select></div>'
+
+        + '<div class="grph">One portion</div>'
+        + '<div class="szrow">'
+        + '<input type="text" inputmode="decimal" id="fsz" value="'+(data.sz==null?"":data.sz)+'" placeholder="e.g. 400">'
+        + '<select id="fu">'
+        + UNITS.map(function(u){ return '<option value="'+u[0]+'"'+((data.u||"g")===u[0]?" selected":"")+'>'+u[1]+'</option>'; }).join("")
+        + '</select></div>'
+        + '<div class="rowmeta" style="margin:6px 0 18px">What you normally eat at once.</div>'
+
+        + '<div class="grp"><div class="grph">Ingredients</div>'
+        + '<div class="rowmeta" style="margin-bottom:6px">Not in the database? Long-press the box and '
+        + 'choose <b>Scan Text</b> to read the packet with your camera.</div>'
+        + '<textarea id="fing" placeholder="Ingredients…">'+esc(data.raw||"")+'</textarea>'
+        + '<button class="btn" data-parse="1">Read the ingredients</button>'
+        + '<input type="file" accept="image/*" capture="environment" id="cam" style="display:none">'
+        + '<input type="file" accept="image/*" id="lib" style="display:none">'
+        + '<button class="btnlink" data-cam="1">Or try the built-in reader</button></div>'
+
         + breakdownHTML(data)
         + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
       FLAGS.forEach(function (fl) {
@@ -850,6 +1178,30 @@
     return h;
   }
 
+  function hasBarcodeScanner() { return typeof BarcodeDetector !== "undefined"; }
+
+  function scanBarcode() {
+    var inp = document.getElementById("bcshot");
+    if (!inp) return;
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      grabDraft();
+      ocrStatus("Reading the barcode\u2026");
+      prepImage(f, function (canvas) {
+        if (!canvas) return ocrStatus("That image didn't load.");
+        try {
+          var det = new BarcodeDetector({ formats: ["ean_13","ean_8","upc_a","upc_e","code_128"] });
+          det.detect(canvas).then(function (codes) {
+            if (!codes || !codes.length) return ocrStatus("No barcode found. Fill the frame with it, or type the digits.");
+            lookupBarcode(codes[0].rawValue);
+          }).catch(function () { ocrStatus("Couldn't read that barcode. Type the digits instead."); });
+        } catch (e) { ocrStatus("Couldn't read that barcode. Type the digits instead."); }
+      });
+    };
+    inp.click();
+  }
+
   function grabDraft() {
     var n = document.getElementById("fname"), g = document.getElementById("fing"),
         z = document.getElementById("fsz"), u = document.getElementById("fu");
@@ -857,6 +1209,8 @@
     if (g) draft.raw = g.value;
     if (z) draft.sz = z.value ? parseFloat(String(z.value).replace(",", ".")) : null;
     if (u) draft.u = u.value;
+    var bc = document.getElementById("fbc");
+    if (bc) draft.barcode = bc.value.replace(/\D/g, "");
     (draft.items || []).forEach(function (it, i) {
       var el = document.getElementById("ip" + i);
       if (!el) return;
@@ -1246,7 +1600,13 @@
     var days = Object.keys(state.days).sort();
     var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Your log</h2>'
       + '<div class="sub">'+days.length+' '+(days.length===1?"day":"days")+' recorded · '
-      + state.foods.length+' saved foods.</div>';
+      + state.foods.length+' saved foods.'
+      + (days.length ? '<br>' + esc(
+          parseD(days[0]).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})
+          + " \u2192 " +
+          parseD(days[days.length-1]).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})
+        ) : '')
+      + '</div>';
     var r = state.routine || {};
     h += '<div class="grp"><div class="grph">Standing routine</div>';
     if (!r.am && !r.pm && !r.notes) {
@@ -1272,6 +1632,16 @@
        + '</div><button class="btn" data-reader="1">'
        + (state.reader ? 'Change reader URL' : 'Use an AI reader instead') + '</button></div>';
 
+    var bytes = 0;
+    try { bytes = JSON.stringify(state).length; } catch (e) {}
+    var kb = (bytes / 1024).toFixed(1);
+    var span = "";
+    var allDays = Object.keys(state.days).sort();
+    if (allDays.length) {
+      span = parseD(allDays[0]).toLocaleDateString(undefined, { day:"numeric", month:"short", year:"numeric" })
+           + " \u2192 " + parseD(allDays[allDays.length-1]).toLocaleDateString(undefined, { day:"numeric", month:"short", year:"numeric" });
+    }
+
     var db = daysSinceBackup();
     h += '<div class="grp"><div class="grph">Backup</div>'
        + '<button class="btn go" data-share="1">Save a backup</button>'
@@ -1280,6 +1650,8 @@
        + '<div class="rowmeta" style="margin-top:10px">'
        + (db === null ? "Never backed up." : db === 0 ? "Backed up today." : "Last backup "+db+" day"+(db===1?"":"s")+" ago.")
        + ' Your log lives only on this phone — send a backup to Files or Notes every couple of weeks.'
+       + '<br>Using ' + kb + ' KB. There is no cap on how many days you keep — at this rate a decade of '
+       + 'logging is still a rounding error against the browser\'s storage limit.'
        + '</div></div>';
 
     h += '<div class="grp"><div class="grph">Entries</div>';
@@ -1349,7 +1721,7 @@
         sheet = null; save(); return render();
       }
       if (d.newfood) { draft = {name:"",flags:[],ingredients:[],items:[],raw:"",rawFull:"",
-        sz:null,u:"g",cat:"",catTouched:false,editing:null}; return openSheet("food"); }
+        sz:null,u:"g",cat:"",catTouched:false,barcode:"",editing:null}; return openSheet("food"); }
       if (d.edit) {
         var ef = state.foods[+d.edit];
         if (!ef) return;
@@ -1357,8 +1729,69 @@
                   items: (ef.items||[]).map(function (it) { return { n:it.n, p:it.p, est:it.est, fl:(it.fl||[]).slice() }; }),
                   raw: ef.raw || (ef.ing||[]).join(", "), rawFull: ef.rawFull || "",
                   sz: ef.sz == null ? null : ef.sz, u: ef.u || "g",
-                  cat: catOf(ef), catTouched: true, editing: ef.n };
+                  cat: catOf(ef), catTouched: true, barcode: ef.barcode || "", editing: ef.n };
         return openSheet("food", draft);
+      }
+      if (d.calendar) { calMonth = monthKey(sel); return openSheet("calendar"); }
+      if (d.month) { calMonth = d.month; return openSheet("calendar"); }
+      if (d.pick) { sel = d.pick; calMonth = null; sheet = null; view = "today"; return render(); }
+      if (d.week) {
+        var target = shift(sel, 7 * (+d.week));
+        if (isFuture(target)) target = todayStr();
+        sel = target;
+        return render();
+      }
+      if (d.carry) {
+        var cs2 = peek(sel);
+        if (!cs2) return;
+        var fa3 = {};
+        (cs2.f || []).forEach(function (x) { fa3[x] = (cs2.fa && cs2.fa[x]) || 1; });
+        state.carry = { d: shift(sel, 1), from: sel, t: (cs2.t||[]).slice(), f: (cs2.f||[]).slice(), fa: fa3 };
+        save(); return render();
+      }
+      if (d.uncarry) { state.carry = null; save(); return render(); }
+      if (d.managetags) return openSheet("tags");
+      if (d.rentag) {
+        var oldT = state.custom[+d.rentag];
+        if (!oldT) return;
+        var newT = prompt("Rename this tag:", oldT);
+        if (!newT || !newT.trim()) return;
+        newT = newT.trim();
+        if (newT === oldT) return;
+        if (state.custom.indexOf(newT) >= 0) { alert("You already have a tag called that."); return; }
+        state.custom[+d.rentag] = newT;
+        Object.keys(state.days).forEach(function (dd) {
+          var de = state.days[dd];
+          if (!de.t) return;
+          var ix = de.t.indexOf(oldT);
+          if (ix >= 0) de.t[ix] = newT;
+        });
+        (state.presets || []).forEach(function (ps) {
+          if (!ps.t) return;
+          var ix2 = ps.t.indexOf(oldT);
+          if (ix2 >= 0) ps.t[ix2] = newT;
+        });
+        save(); return openSheet("tags");
+      }
+      if (d.deltag) {
+        var delT = state.custom[+d.deltag];
+        if (!delT) return;
+        var n2 = 0;
+        for (var dk in state.days) { var dv = state.days[dk]; if (dv.t && dv.t.indexOf(delT) >= 0) n2++; }
+        if (!confirm('Delete "'+delT+'"?' + (n2 ? " It will also be removed from the "+n2+" day"+(n2===1?"":"s")+" you logged it." : ""))) return;
+        state.custom.splice(+d.deltag, 1);
+        Object.keys(state.days).forEach(function (dd) {
+          var de2 = state.days[dd];
+          if (!de2.t) return;
+          var ix3 = de2.t.indexOf(delT);
+          if (ix3 >= 0) de2.t.splice(ix3, 1);
+        });
+        (state.presets || []).forEach(function (ps2) {
+          if (!ps2.t) return;
+          var ix4 = ps2.t.indexOf(delT);
+          if (ix4 >= 0) ps2.t.splice(ix4, 1);
+        });
+        save(); return openSheet("tags");
       }
       if (d.presets) return openSheet("presets");
       if (d.copyprev) {
@@ -1403,8 +1836,11 @@
       if (d.resetday) {
         if (!confirm("Clear everything logged on "+longDate(sel)+"? This can't be undone.")) return;
         delete state.days[sel];
+        if (state.carry && state.carry.from === sel) state.carry = null;
         save(); return render();
       }
+      if (d.lookup) { grabDraft(); return lookupBarcode(draft.barcode); }
+      if (d.bcscan) return scanBarcode();
       if (d.recount) { grabDraft(); rebuildDraft(); return openSheet("food", draft); }
       if (d.docrop) return runCrop(false);
       if (d.cropall) return runCrop(true);
@@ -1434,7 +1870,8 @@
         if (!draft.ingredients.length && draft.raw) draft.ingredients = parseIngredients(draft.raw).parts;
         var payload = { ing: draft.ingredients, fl: draft.flags, items: draft.items || [],
                         sz: draft.sz, u: draft.u || "g", raw: draft.raw, rawFull: draft.rawFull || "",
-                        cat: (draft.catTouched && draft.cat) ? draft.cat : guessCat(draft.flags, draft.u) };
+                        cat: (draft.catTouched && draft.cat) ? draft.cat : guessCat(draft.flags, draft.u),
+                        barcode: draft.barcode || "" };
         var wasEditing = draft.editing;
         var target = wasEditing ? foodByName(wasEditing) : foodByName(name);
         if (target) {
@@ -1525,6 +1962,7 @@
           state.backedUp = v.backedUp || null;
           state.reader = v.reader || "";
           state.presets = v.presets || [];
+          state.carry = v.carry || null;
           save(); render();
         } catch (e) { alert("That didn't look like a backup from this app. Nothing was changed."); }
         return;

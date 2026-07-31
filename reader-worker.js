@@ -38,6 +38,24 @@ export default {
     try { body = await request.json(); }
     catch { return json({ error: "Bad request." }, 400, cors); }
 
+    // --- barcode proxy: only needed if the browser can't reach Open Food Facts directly.
+    // Also lets us send the descriptive User-Agent that OFF asks clients for.
+    if (body.barcode) {
+      const code = String(body.barcode).replace(/\D/g, "");
+      if (code.length < 8 || code.length > 14) return json({ error: "Bad barcode." }, 400, cors);
+      const fields = typeof body.fields === "string" ? body.fields : "";
+      const url = "https://world.openfoodfacts.org/api/v2/product/" + code + ".json"
+                + (fields ? "?fields=" + encodeURIComponent(fields) : "");
+      try {
+        const off = await fetch(url, {
+          headers: { "User-Agent": "SkinLog/1.0 (personal skin diary; contact via GitHub)" }
+        });
+        return json(await off.json(), 200, cors);
+      } catch {
+        return json({ error: "Couldn't reach the food database." }, 502, cors);
+      }
+    }
+
     const image = body.image;
     if (!image || typeof image !== "string") {
       return json({ error: "No image received." }, 400, cors);
