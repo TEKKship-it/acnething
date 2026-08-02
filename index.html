@@ -122,6 +122,14 @@
   .tag.on { background: var(--paper); border-color: var(--paper); color: var(--ink); }
   .tag.add { border-style: dashed; color: var(--paper-dim); }
   .tag.scan { border-color: var(--mark); color: var(--mark); }
+  .tag.once { border-color: var(--calm); color: var(--calm); }
+  .tag.once.on { background: var(--calm); border-color: var(--calm); color: #0A2620; }
+  .tag.once.dash { border-style: dashed; }
+  .oncepill { display: inline-block; margin-left: 7px; padding: 1px 5px; border-radius: 5px;
+    border: 1px solid var(--calm); color: var(--calm); vertical-align: 1px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 8px;
+    letter-spacing: .08em; text-transform: uppercase; }
+  .pactions { display: flex; gap: 12px; }
 
   textarea, input[type=text] { width: 100%; background: var(--ink-2); border: 1px solid var(--line);
     border-radius: 14px; color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; }
@@ -161,6 +169,19 @@
     padding: 14px; margin: 14px 0 0; }
   .warnt { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
     letter-spacing: .12em; text-transform: uppercase; color: var(--flare); }
+  .meals { margin-top: 10px; }
+  .mealcard { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 8px 14px 10px; margin-bottom: 8px; }
+  .mealcard.solo { border-style: dashed; }
+  .mealh { display: flex; justify-content: space-between; align-items: baseline;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--paper-dim);
+    padding: 4px 0 2px; }
+  .mealcard.solo .mealh { color: var(--faint); }
+  .mealg { color: var(--mark); }
+  button.pamt { background: none; border: 0; padding: 2px 0 0; text-align: left; cursor: pointer;
+    display: block; font-size: 11px; color: var(--faint);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; text-decoration: underline; }
   .portions { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
     padding: 4px 14px 8px; margin-top: 10px; }
   .prow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
@@ -183,6 +204,7 @@
     letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
   select.wide { width: 100%; background: var(--ink-2); border: 1px solid var(--line);
     border-radius: 14px; color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; }
+  .dblink { display: inline-block; margin-top: 8px; color: var(--mark); font-size: 13px; }
   .btnlink { display: block; width: 100%; margin-top: 8px; padding: 8px 0; background: none;
     border: 0; color: var(--paper-dim); cursor: pointer; text-align: left;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
@@ -399,9 +421,31 @@
 
   // ---- Open Food Facts: free, no key, gives real per-ingredient percentages
   var OFF_URL = "https://world.openfoodfacts.org/api/v2/product/";
-  var OFF_FIELDS = "product_name,brands,quantity,product_quantity,product_quantity_unit,serving_quantity,"
-    + "ingredients_text,ingredients,ingredients_tags,allergens_tags,additives_tags,nova_group,"
-    + "ingredients_from_palm_oil_n,nutriments";
+  var OFF_LANGS = ["sv","en","da","no","fi","de","fr","nl","es","it"];
+  var OFF_FIELDS = "product_name,product_name_en,brands,quantity,product_quantity,product_quantity_unit,"
+    + "serving_quantity,ingredients_lc,ingredients_text,ingredients,ingredients_tags,allergens_tags,"
+    + "traces_tags,additives_tags,nova_group,nova_groups_tags,ingredients_from_palm_oil_n,nutriments,"
+    + "image_ingredients_url,"
+    + OFF_LANGS.map(function (l) { return "ingredients_text_" + l; }).join(",");
+
+  // the base ingredients_text is often empty while a language-suffixed one has the data
+  function pickIngredientsText(pr) {
+    if (pr.ingredients_text && pr.ingredients_text.trim()) return pr.ingredients_text.trim();
+    var lc = pr.ingredients_lc;
+    if (lc && pr["ingredients_text_" + lc] && pr["ingredients_text_" + lc].trim()) {
+      return pr["ingredients_text_" + lc].trim();
+    }
+    for (var i = 0; i < OFF_LANGS.length; i++) {
+      var v = pr["ingredients_text_" + OFF_LANGS[i]];
+      if (v && v.trim()) return v.trim();
+    }
+    // last resort: any key that looks like one, in case the language isn't in our list
+    for (var k in pr) {
+      if (k.indexOf("ingredients_text_") === 0 && k.indexOf("_with_allergens") < 0
+          && pr[k] && String(pr[k]).trim()) return String(pr[k]).trim();
+    }
+    return "";
+  }
 
   var ALLERGEN_MAP = {
     "en:milk": "Dairy", "en:gluten": "Gluten / wheat", "en:eggs": "Egg",
@@ -419,7 +463,7 @@
     var add = function (f) { if (f && out.indexOf(f) < 0) out.push(f); };
     flagsFor(idsToText(pr.ingredients_tags)).forEach(add);
     (pr.allergens_tags || []).forEach(function (a) { add(ALLERGEN_MAP[a]); });
-    if (pr.nova_group === 4) add("Highly processed");
+    if (pr.nova_group === 4 || (pr.nova_groups_tags || []).indexOf("en:4") >= 0) add("Highly processed");
     if ((pr.additives_tags || []).length) add("Additives / preservatives");
     if (pr.ingredients_from_palm_oil_n > 0) add("Palm oil");
     var n = pr.nutriments || {};
@@ -498,16 +542,21 @@
     }
     draft.serving = pr.serving_quantity ? Math.round(parseFloat(pr.serving_quantity)) : null;
 
-    draft.raw = pr.ingredients_text || "";
-    draft.rawFull = draft.raw;
+    var text = pickIngredientsText(pr);
+    draft.raw = text;
+    draft.rawFull = text;
     draft.foundSection = true;
+    draft.labelPhoto = pr.image_ingredients_url || "";
 
     var items = itemsFromOFF(pr);
     if (items && items.length) {
       draft.items = items;
       draft.ingredients = items.map(function (it) { return it.n; });
-    } else if (draft.raw) {
-      rebuildDraft();
+    } else if (text) {
+      rebuildDraft();          // structured list missing, but we have the printed text
+    } else {
+      draft.items = [];
+      draft.ingredients = [];
     }
 
     var fl = flagsFromOFF(pr);
@@ -515,6 +564,11 @@
       (it.fl || []).forEach(function (f) { if (fl.indexOf(f) < 0) fl.push(f); });
     });
     draft.flags = fl;
+
+    // three genuinely different outcomes — say which one happened
+    if (draft.items.length) draft.dbState = "full";
+    else if (fl.length) draft.dbState = "partial";
+    else draft.dbState = "bare";
     draft.fromDB = true;
     openSheet("food", draft);
   }
@@ -588,10 +642,11 @@
 
   function entry(d) {
     var e = state.days[d];
-    if (!e) e = state.days[d] = { k:{co:0,inf:0,dp:0}, nw:0, s:null, t:[], f:[], fa:{}, z:[], n:"" };
+    if (!e) e = state.days[d] = { k:{co:0,inf:0,dp:0}, nw:0, s:null, t:[], f:[], fa:{}, m:{}, oneoff:[], z:[], n:"" };
     if (!e.k) e.k = { co:0, inf:(e.c||0), dp:0 };
     if (e.nw == null) e.nw = 0;
-    if (!e.t) e.t = []; if (!e.f) e.f = []; if (!e.z) e.z = []; if (!e.fa) e.fa = {};
+    if (!e.t) e.t = []; if (!e.f) e.f = []; if (!e.z) e.z = [];
+    if (!e.fa) e.fa = {}; if (!e.m) e.m = {}; if (!e.oneoff) e.oneoff = [];
     return e;
   }
   function peek(d) { return state.days[d]; }
@@ -607,7 +662,23 @@
     return e.k ? (e.k[m]||0) : null;
   }
   function touched(e) { return !!e && (e.k || e.c != null || (e.t&&e.t.length) || (e.f&&e.f.length)); }
-  function foodByName(n) { for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return state.foods[i]; return null; }
+  // a one-off is stored on the day itself (e.deposit) instead of the saved library
+  function foodByName(n, e) {
+    for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return state.foods[i];
+    var scope = e || state.days[sel];
+    if (scope && scope.oneoff) { for (var j=0;j<scope.oneoff.length;j++) if (scope.oneoff[j].n===n) return scope.oneoff[j]; }
+    // a one-off logged on some other day still needs resolving for analysis
+    for (var d in state.days) {
+      var dd = state.days[d];
+      if (!dd.oneoff) continue;
+      for (var k=0;k<dd.oneoff.length;k++) if (dd.oneoff[k].n===n) return dd.oneoff[k];
+    }
+    return null;
+  }
+  function isOneOff(n) {
+    for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return false;
+    return true;
+  }
   function effective(e) {
     var out = (e.t||[]).slice();
     (e.f||[]).forEach(function (nm) {
@@ -618,26 +689,65 @@
   }
   function kindOf(t) { return FLAGS.indexOf(t)>=0 ? "ing" : foodByName(t) ? "food" : "tag"; }
 
+  // A meal is a set of foods eaten together. Anything not grouped is a meal of one.
+  function mealGroups(e) {
+    var order = [], byId = {};
+    (e && e.f ? e.f : []).forEach(function (nm) {
+      var id = (e.m && e.m[nm] != null) ? "g" + e.m[nm] : "solo:" + nm;
+      if (!byId[id]) { byId[id] = { id: id, solo: id.indexOf("solo:") === 0, foods: [] }; order.push(byId[id]); }
+      byId[id].foods.push(nm);
+    });
+    return order;
+  }
+  function nextMealId(e) {
+    var max = 0;
+    for (var k in (e.m || {})) { var v = +e.m[k]; if (v > max) max = v; }
+    return max + 1;
+  }
+  function setMeal(e, nm, id) {
+    if (!e.m) e.m = {};
+    if (id == null) delete e.m[nm]; else e.m[nm] = id;
+    // drop groups that have fallen to a single member — a group of one is just a solo food
+    var counts = {};
+    for (var k in e.m) counts[e.m[k]] = (counts[e.m[k]] || 0) + 1;
+    for (var k2 in e.m) if (counts[e.m[k2]] < 2) delete e.m[k2];
+  }
+
+  // grams one food contributes to one tag
+  function foodDose(e, nm, t) {
+    var f = foodByName(nm, e);
+    if (!f || !f.sz || f.u === "piece") return 0;
+    var grams = ((e.fa && e.fa[nm]) || 1) * f.sz;
+    if (nm === t) return grams;
+    if (!f.items || !f.items.length) return 0;
+    var pct = 0;
+    f.items.forEach(function (it) { if ((it.fl || []).indexOf(t) >= 0) pct += (it.p || 0); });
+    return grams * pct / 100;
+  }
+
+  // the largest amount of a tag eaten in any single sitting that day
+  function peakDose(e, t) {
+    var best = 0;
+    mealGroups(e).forEach(function (g) {
+      var sum = 0;
+      g.foods.forEach(function (nm) { sum += foodDose(e, nm, t); });
+      if (sum > best) best = sum;
+    });
+    return Math.round(best);
+  }
+
   // grams of a tag on a day, attributed through each ingredient's share of the portion
   function dose(e, t) {
     if (!e || !e.f || !e.f.length) return 0;
     var total = 0;
-    e.f.forEach(function (nm) {
-      var f = foodByName(nm);
-      if (!f || !f.sz || f.u === "piece") return;
-      var grams = ((e.fa && e.fa[nm]) || 1) * f.sz;
-      if (nm === t) { total += grams; return; }
-      if (!f.items || !f.items.length) return;
-      f.items.forEach(function (it) {
-        if ((it.fl || []).indexOf(t) < 0) return;
-        total += grams * (it.p || 0) / 100;
-      });
-    });
+    e.f.forEach(function (nm) { total += foodDose(e, nm, t); });
     return Math.round(total);
   }
   function doseable(t) {
-    for (var i = 0; i < state.foods.length; i++) {
-      var f = state.foods[i];
+    var pool = state.foods.slice();
+    for (var d in state.days) pool = pool.concat(state.days[d].oneoff || []);
+    for (var i = 0; i < pool.length; i++) {
+      var f = pool[i];
       if (!f.sz || f.u === "piece") continue;
       if (f.n === t) return true;
       if (f.items) for (var j = 0; j < f.items.length; j++)
@@ -656,6 +766,12 @@
     state.custom.forEach(function (t) { if (out.indexOf(t)<0) out.push(t); });
     state.foods.forEach(function (f) { if (out.indexOf(f.n)<0) out.push(f.n);
       (f.fl||[]).forEach(function (fl) { if (out.indexOf(fl)<0) out.push(fl); }); });
+    for (var d in state.days) {
+      (state.days[d].oneoff || []).forEach(function (f) {
+        if (out.indexOf(f.n)<0) out.push(f.n);
+        (f.fl||[]).forEach(function (fl) { if (out.indexOf(fl)<0) out.push(fl); });
+      });
+    }
     return out;
   }
 
@@ -765,7 +881,7 @@
     return h;
   }
 
-  var carriedFrom = null;
+  var carriedFrom = null, mealTarget = null;
 
   // a "save for tomorrow" drops itself onto the next day you open, once
   function maybeCarry() {
@@ -776,10 +892,19 @@
     if (touched(peek(sel))) return;          // never overwrite a day you already started
     var tgt = entry(sel);
     (c.t || []).forEach(function (x) { if (tgt.t.indexOf(x) < 0) tgt.t.push(x); });
+    var carriedOnce = {};
+    (c.oneoff || []).forEach(function (f) { carriedOnce[f.n] = true; });
     (c.f || []).forEach(function (x) {
-      if (!foodByName(x)) return;            // food was deleted in the meantime
+      if (!carriedOnce[x] && !foodByName(x)) return;   // library food deleted in the meantime
       if (tgt.f.indexOf(x) < 0) tgt.f.push(x);
       if (tgt.fa[x] == null) tgt.fa[x] = (c.fa && c.fa[x]) || 1;
+    });
+    if (c.m) { tgt.m = tgt.m || {}; for (var cm in c.m) if (tgt.m[cm] == null) tgt.m[cm] = c.m[cm]; }
+    (c.oneoff || []).forEach(function (f) {
+      if (tgt.f.indexOf(f.n) < 0) return;
+      var dup = false;
+      (tgt.oneoff = tgt.oneoff || []).forEach(function (x) { if (x.n === f.n) dup = true; });
+      if (!dup) tgt.oneoff.push(JSON.parse(JSON.stringify(f)));
     });
     carriedFrom = c.from || null;
     state.carry = null;
@@ -871,21 +996,53 @@
       h += '</div></div>';
     });
 
+    var oneoffs = (e && e.oneoff) ? e.oneoff : [];
+    if (oneoffs.length) {
+      h += '<div class="catrow"><div class="cath">Just today</div><div class="tags">';
+      oneoffs.forEach(function (f) {
+        var on = sel_f.indexOf(f.n) >= 0;
+        h += '<button class="tag once'+(on?" on":"")+'" data-food="'+esc(f.n)+'" data-fname="'+esc(fold(f.n))+'">'
+           + esc(f.n)+'</button>';
+      });
+      h += '</div></div>';
+    }
     h += '<div class="tags" style="margin-top:10px">'
-       + '<button class="tag scan" data-newfood="1">+ Add a food</button></div>';
+       + '<button class="tag scan" data-newfood="1">+ Add a food</button>'
+       + '<button class="tag once dash" data-newfood="once">+ One-off meal</button></div>';
 
     if (sel_f.length) {
-      h += '<div class="portions">';
-      sel_f.forEach(function (nm) {
-        var f = foodByName(nm), pp = (e.fa && e.fa[nm]) || 1;
-        var amt = (f && f.sz) ? (Math.round(pp * f.sz * 10) / 10) + " " + (f.u === "piece" ? "pcs" : f.u) : "";
-        h += '<div class="prow"><span class="pname">'+esc(nm)
-           + (amt ? '<span class="pamt">'+esc(amt)+'</span>' : '<span class="pamt">no portion set</span>')+'</span>'
-           + '<button class="mini" data-portion="'+esc(nm)+'" data-pstep="-0.5">&minus;</button>'
-           + '<span class="tval">'+(pp % 1 === 0 ? pp : pp.toFixed(1))+'</span>'
-           + '<button class="mini" data-portion="'+esc(nm)+'" data-pstep="0.5">+</button></div>';
+      var groups = mealGroups(e);
+      h += '<div class="meals">';
+      groups.forEach(function (g, gi) {
+        var gsum = 0;
+        g.foods.forEach(function (nm) {
+          var f0 = foodByName(nm);
+          if (f0 && f0.sz && f0.u !== "piece") gsum += ((e.fa && e.fa[nm]) || 1) * f0.sz;
+        });
+        h += '<div class="mealcard' + (g.solo ? " solo" : "") + '">'
+           + '<div class="mealh">' + (g.solo ? "On its own" : "Meal " + (gi + 1))
+           + (gsum ? '<span class="mealg">' + Math.round(gsum) + ' g</span>' : '') + '</div>';
+        g.foods.forEach(function (nm) {
+          var f = foodByName(nm), pp = (e.fa && e.fa[nm]) || 1;
+          var amt = (f && f.sz) ? (Math.round(pp * f.sz * 10) / 10) + " " + (f.u === "piece" ? "pcs" : f.u) : "no portion";
+          var once = isOneOff(nm);
+          h += '<div class="prow"><span class="pname">' + esc(nm)
+             + (once ? '<span class="oncepill">one-off</span>' : '')
+             + '<span class="pactions">' 
+             + '<button class="pamt" data-movefood="' + esc(nm) + '">' + esc(amt) + ' &middot; move &#8644;</button>'
+             + (once ? '<button class="pamt" data-editonce="' + esc(nm) + '">edit</button>' : '')
+             + '</span></span>' 
+             + '<button class="mini" data-portion="' + esc(nm) + '" data-pstep="-0.5">&minus;</button>'
+             + '<span class="tval">' + (pp % 1 === 0 ? pp : pp.toFixed(1)) + '</span>'
+             + '<button class="mini" data-portion="' + esc(nm) + '" data-pstep="0.5">+</button></div>';
+        });
+        h += '</div>';
       });
       h += '</div>';
+      if (sel_f.length > 1 && groups.length === sel_f.length) {
+        h += '<div class="rowmeta" style="margin-top:8px">Ate any of these together? Tap <b>move</b> '
+           + 'under a food to put it in the same meal as another.</div>';
+      }
     }
     if (!state.foods.length) {
       h += '<div class="rowmeta" style="margin-top:9px">Add a product once and it lives here as a one-tap button.</div>';
@@ -963,7 +1120,7 @@
     return h+'</div>';
   }
 
-  var draft = { name:"", flags:[], ingredients:[], items:[], raw:"", rawFull:"", sz:null, u:"g", barcode:"", editing:null };
+  var draft = { name:"", flags:[], ingredients:[], items:[], raw:"", rawFull:"", sz:null, u:"g", barcode:"", labelPhoto:"", dbState:"", editing:null };
   var shot = null, cropBox = null, cropView = null;
   function openSheet(stage, data) { sheet = sheetHTML(stage, data||draft); render(); }
   function closeSheet() { sheet = null; render(); }
@@ -1068,6 +1225,24 @@
           + '<button class="tag" data-deltag="'+i+'">Delete</button></div></div>';
       });
       h += '<button class="btn" data-close="1">Close</button>';
+    } else if (stage === "meal") {
+      var me = state.days[sel] || { f: [], m: {} }, nm4 = mealTarget;
+      var gs = mealGroups(me);
+      h += '<h2 class="sec">Eaten with what?</h2>'
+        + '<div class="sub">' + esc(nm4) + ' — group it with whatever you had at the same sitting.</div>';
+      gs.forEach(function (g, gi) {
+        var others = g.foods.filter(function (x) { return x !== nm4; });
+        if (!others.length) return;
+        var mine = g.foods.indexOf(nm4) >= 0;
+        h += '<button class="btn' + (mine ? " go" : "") + '" data-setmeal="'
+           + (g.solo ? "with:" + esc(others[0]) : g.id.slice(1)) + '">'
+           + (mine ? "\u2713 " : "") + (g.solo ? "With " + esc(others[0]) : "Meal " + (gi + 1) + " \u2014 " + esc(others.join(", ")))
+           + '</button>';
+      });
+      var alone = !me.m || me.m[nm4] == null;
+      h += '<button class="btn' + (alone ? " go" : "") + '" data-setmeal="alone">'
+        + (alone ? "\u2713 " : "") + 'On its own</button>'
+        + '<button class="btn" data-close="1">Cancel</button>';
     } else if (stage === "presets") {
       h += '<h2 class="sec">Presets</h2>'
         + '<div class="sub">A saved set of foods and tags you can drop onto any day. Good for the meals '
@@ -1114,11 +1289,7 @@
 
         + '<div id="ocr" class="ocr"></div>'
 
-        + (data.fromDB ? '<div class="note" style="border-color:var(--calm);margin:0 0 14px">'
-             + 'Found in the product database.'
-             + (data.serving && data.sz && data.serving !== data.sz
-                 ? ' Pack is '+data.sz+data.u+'; one stated serving is '+data.serving+data.u+'.' : '')
-             + '</div>' : '')
+        + (data.fromDB ? dbNote(data) : '')
 
         + '<div class="grp"><div class="grph">Category</div>'
         + '<select id="fcat" class="wide">'
@@ -1151,7 +1322,18 @@
         h += '<button class="tag'+((data.flags||[]).indexOf(fl)>=0?" on":"")+'" data-flag="'+esc(fl)+'">'+esc(fl)+'</button>';
       });
       h += '</div></div>'
-        + '<button class="btn go" data-savefood="1">Save it</button>'
+        + (data.editing || data.editingOnce ? ''
+            : '<div class="grp"><div class="grph">Keep it?</div>'
+              + '<div class="sev">'
+              + '<button class="sevb'+(data.once?"":" on")+'" data-once="0">Save to my foods</button>'
+              + '<button class="sevb'+(data.once?" on":"")+'" data-once="1">Just today</button>'
+              + '</div>'
+              + '<div class="rowmeta" style="margin-top:6px">'
+              + (data.once
+                   ? 'Stays on this day only — it will not clutter your food list. Still counts fully in Patterns.'
+                   : 'Becomes a reusable chip you can tap on any day.')
+              + '</div></div>')
+        + '<button class="btn go" data-savefood="1">'+(data.once&&!data.editing?"Add to today":"Save it")+'</button>'
         + '<button class="btn" data-close="1">Cancel</button>';
     }
     return h+'</div></div>';
@@ -1176,6 +1358,33 @@
       + 'the ones printed on the pack were read directly.</div>';
     h += '<button class="btn" data-recount="1">Re-read from the text above</button></div>';
     return h;
+  }
+
+  function dbNote(data) {
+    var serving = (data.serving && data.sz && data.serving !== data.sz)
+      ? ' Pack is ' + data.sz + data.u + '; one stated serving is ' + data.serving + data.u + '.' : '';
+    if (data.dbState === "full") {
+      return '<div class="note" style="border-color:var(--calm);margin:0 0 14px">'
+        + 'Found, with a full ingredient breakdown.' + serving + '</div>';
+    }
+    if (data.dbState === "partial") {
+      return '<div class="note" style="border-color:var(--mark);margin:0 0 14px">'
+        + '<b>Found, but nobody has typed in the ingredient list.</b> The groups below come from its '
+        + 'allergen and additive tags only, so amounts will be missing. '
+        + (data.labelPhoto ? 'There is a photo of the label — open it, then copy the text in.'
+                           : 'Add the ingredients by hand below.')
+        + (data.labelPhoto ? '<br><a class="dblink" href="' + esc(data.labelPhoto)
+             + '" target="_blank" rel="noopener">Open the label photo</a>' : '')
+        + serving + '</div>';
+    }
+    return '<div class="note" style="border-color:var(--flare);margin:0 0 14px">'
+      + '<b>Found the product, but it has no ingredient data at all.</b> Open Food Facts is '
+      + 'crowd-sourced and many entries are just a name and a barcode. '
+      + (data.labelPhoto ? 'Someone did photograph the label though.'
+                         : 'Type the ingredients in below, or use Scan Text on the packet.')
+      + (data.labelPhoto ? '<br><a class="dblink" href="' + esc(data.labelPhoto)
+           + '" target="_blank" rel="noopener">Open the label photo</a>' : '')
+      + serving + '</div>';
   }
 
   function hasBarcodeScanner() { return typeof BarcodeDetector !== "undefined"; }
@@ -1507,8 +1716,15 @@
     });
     h += '</div><div class="chips">'
        + '<button class="chip'+(mode==="presence"?" on":"")+'" data-mode="presence">Ate it or not</button>'
-       + '<button class="chip'+(mode==="amount"?" on":"")+'" data-mode="amount">How much</button>'
-       + '</div>' + laserPanel();
+       + '<button class="chip'+(mode==="amount"?" on":"")+'" data-mode="amount">Daily total</button>'
+       + '<button class="chip'+(mode==="peak"?" on":"")+'" data-mode="peak">Biggest meal</button>'
+       + '</div>'
+       + (mode === "peak"
+            ? '<div class="note" style="margin-bottom:16px">Comparing the <b>largest amount you ate in '
+              + 'one sitting</b> rather than the daily total. Two days can carry the same total and very '
+              + 'different peaks \u2014 that difference is what drives a glycaemic or insulin response.</div>'
+            : '')
+       + laserPanel();
 
     var res = analyse(lag, measure);
     if (!res.length) {
@@ -1524,7 +1740,8 @@
         h += '<div class="row"><div><div class="rowname">'
            + (k==="ing"?'<span class="kind ing">ingredient</span>':k==="food"?'<span class="kind">product</span>':'')
            + esc(r.tag)
-           + (r.byAmount ? '<span class="kind" style="margin-left:7px;margin-right:0">by amount</span>' : '')
+           + (r.byAmount ? '<span class="kind" style="margin-left:7px;margin-right:0">'
+               + (r.peaked ? "per meal" : "by amount") + '</span>' : '')
            + '</div><div class="rowmeta">'
            + (r.byAmount
                ? r.a.toFixed(1)+' on heavier days, ~'+r.hiAvg+'g ('+r.na+'d) · '+r.b.toFixed(1)+' on lighter days ('+r.nb+'d)'
@@ -1566,13 +1783,15 @@
     days.forEach(function (d) { cache[d] = effective(state.days[d]); });
 
     allTags().forEach(function (t) {
-      var byAmount = (mode === "amount") && doseable(t);
+      var byAmount = (mode === "amount" || mode === "peak") && doseable(t);
+      var peaked = (mode === "peak");
       var pairs = [];
       days.forEach(function (d) {
         var v = metric(state.days[d], m); if (v == null) return;
         var sd = shift(d, -l), src = state.days[sd];
         if (!touched(src)) return;
-        pairs.push({ v: v, on: (cache[sd]||[]).indexOf(t) >= 0, g: byAmount ? dose(src, t) : 0 });
+        pairs.push({ v: v, on: (cache[sd]||[]).indexOf(t) >= 0,
+                     g: byAmount ? (peaked ? peakDose(src, t) : dose(src, t)) : 0 });
       });
       if (pairs.length < 6) return;
 
@@ -1588,7 +1807,7 @@
       if (A.length < 3 || B.length < 3) return;
       var a = mean(A), b = mean(B);
       out.push({ tag:t, a:a, b:b, delta:a-b, na:A.length, nb:B.length,
-                 byAmount: byAmount, cut: cut,
+                 byAmount: byAmount, peaked: peaked, cut: cut,
                  hiAvg: byAmount ? Math.round(mean(pairs.filter(function(p){return p.g>cut;}).map(function(p){return p.g;}))) : null });
     });
     out.sort(function (x,y) { return Math.abs(y.delta) - Math.abs(x.delta); });
@@ -1669,14 +1888,15 @@
   function csv() {
     var tags = allTags();
     var doseCols = tags.filter(doseable);
-    var rows = ["date,new_today,total,clogged,inflamed,deep,skinfeel,zones,"
+    var rows = ["date,new_today,total,clogged,inflamed,deep,skinfeel,zones,meals,"
       + tags.map(function(t){return '"'+t+'"';}).join(",")
       + (doseCols.length ? "," + doseCols.map(function(t){return '"'+t+' (g)"';}).join(",") : "")
       + ",notes"];
     Object.keys(state.days).sort().forEach(function (d) {
       var e = state.days[d], k = e.k||{}, eff = effective(e);
       var cells = [d, e.nw==null?"":e.nw, totalOf(e)==null?"":totalOf(e), k.co==null?"":k.co,
-        k.inf==null?"":k.inf, k.dp==null?"":k.dp, e.s==null?"":e.s, '"'+(e.z||[]).join("; ")+'"'];
+        k.inf==null?"":k.inf, k.dp==null?"":k.dp, e.s==null?"":e.s, '"'+(e.z||[]).join("; ")+'"',
+        '"'+mealGroups(e).map(function(g){return g.foods.join(" + ");}).join(" | ")+'"'];
       tags.forEach(function (t) { cells.push(eff.indexOf(t)>=0?1:0); });
       doseCols.forEach(function (t) { cells.push(dose(e, t)); });
       cells.push('"'+String(e.n||"").replace(/"/g,'""')+'"');
@@ -1721,7 +1941,8 @@
         sheet = null; save(); return render();
       }
       if (d.newfood) { draft = {name:"",flags:[],ingredients:[],items:[],raw:"",rawFull:"",
-        sz:null,u:"g",cat:"",catTouched:false,barcode:"",editing:null}; return openSheet("food"); }
+        sz:null,u:"g",cat:"",catTouched:false,barcode:"",labelPhoto:"",dbState:"",fromDB:false,
+        once:(d.newfood==="once"),editing:null,editingOnce:null}; return openSheet("food"); }
       if (d.edit) {
         var ef = state.foods[+d.edit];
         if (!ef) return;
@@ -1746,7 +1967,9 @@
         if (!cs2) return;
         var fa3 = {};
         (cs2.f || []).forEach(function (x) { fa3[x] = (cs2.fa && cs2.fa[x]) || 1; });
-        state.carry = { d: shift(sel, 1), from: sel, t: (cs2.t||[]).slice(), f: (cs2.f||[]).slice(), fa: fa3 };
+        state.carry = { d: shift(sel, 1), from: sel, t: (cs2.t||[]).slice(), f: (cs2.f||[]).slice(), fa: fa3,
+                        m: JSON.parse(JSON.stringify(cs2.m || {})),
+                        oneoff: JSON.parse(JSON.stringify(cs2.oneoff || [])) };
         save(); return render();
       }
       if (d.uncarry) { state.carry = null; save(); return render(); }
@@ -1803,6 +2026,13 @@
           if (tgt.f.indexOf(x) < 0) tgt.f.push(x);
           if (tgt.fa[x] == null) tgt.fa[x] = (src.fa && src.fa[x]) || 1;
         });
+        if (src.m) { tgt.m = tgt.m || {}; for (var mk in src.m) if (tgt.m[mk] == null) tgt.m[mk] = src.m[mk]; }
+        (src.oneoff || []).forEach(function (f) {
+          if (tgt.f.indexOf(f.n) < 0) return;
+          var dup = false;
+          (tgt.oneoff = tgt.oneoff || []).forEach(function (x) { if (x.n === f.n) dup = true; });
+          if (!dup) tgt.oneoff.push(JSON.parse(JSON.stringify(f)));
+        });
         save(); return render();
       }
       if (d.savepreset) {
@@ -1814,7 +2044,9 @@
         if (!nm3 || !nm3.trim()) return;
         var fa2 = {};
         (cur.f || []).forEach(function (x) { fa2[x] = (cur.fa && cur.fa[x]) || 1; });
-        state.presets.push({ n: nm3.trim(), t: (cur.t||[]).slice(), f: (cur.f||[]).slice(), fa: fa2 });
+        state.presets.push({ n: nm3.trim(), t: (cur.t||[]).slice(), f: (cur.f||[]).slice(), fa: fa2,
+                             m: JSON.parse(JSON.stringify(cur.m || {})),
+                             oneoff: JSON.parse(JSON.stringify(cur.oneoff || [])) });
         sheet = null; save(); return render();
       }
       if (d.applypreset) {
@@ -1825,6 +2057,12 @@
         (ps2.f || []).forEach(function (x) {
           if (tg.f.indexOf(x) < 0) tg.f.push(x);
           if (tg.fa[x] == null) tg.fa[x] = (ps2.fa && ps2.fa[x]) || 1;
+        });
+        if (ps2.m) { tg.m = tg.m || {}; for (var pk in ps2.m) if (tg.m[pk] == null) tg.m[pk] = ps2.m[pk]; }
+        (ps2.oneoff || []).forEach(function (f) {
+          var dup = false;
+          (tg.oneoff = tg.oneoff || []).forEach(function (x) { if (x.n === f.n) dup = true; });
+          if (!dup) tg.oneoff.push(JSON.parse(JSON.stringify(f)));
         });
         sheet = null; save(); return render();
       }
@@ -1839,6 +2077,7 @@
         if (state.carry && state.carry.from === sel) state.carry = null;
         save(); return render();
       }
+      if (d.once != null) { grabDraft(); draft.once = (d.once === "1"); return openSheet("food", draft); }
       if (d.lookup) { grabDraft(); return lookupBarcode(draft.barcode); }
       if (d.bcscan) return scanBarcode();
       if (d.recount) { grabDraft(); rebuildDraft(); return openSheet("food", draft); }
@@ -1872,6 +2111,38 @@
                         sz: draft.sz, u: draft.u || "g", raw: draft.raw, rawFull: draft.rawFull || "",
                         cat: (draft.catTouched && draft.cat) ? draft.cat : guessCat(draft.flags, draft.u),
                         barcode: draft.barcode || "" };
+
+        // one-off: keep it on this day only, never in the saved library
+        if (draft.once && !draft.editing) {
+          var eo = entry(sel);
+          if (foodByName(name) && !isOneOff(name)) { alert("You already have a saved food called that. Give this one a different name."); return; }
+          payload.n = name;
+          var already = -1;
+          eo.oneoff.forEach(function (f, ix) { if (f.n === name) already = ix; });
+          if (already >= 0) eo.oneoff[already] = payload; else eo.oneoff.push(payload);
+          if (eo.f.indexOf(name) < 0) { eo.f.push(name); eo.fa[name] = 1; }
+          sheet = null; save(); return render();
+        }
+
+        // editing a one-off updates it in place on its day
+        if (draft.editingOnce) {
+          var eo2 = entry(sel);
+          for (var oi = 0; oi < eo2.oneoff.length; oi++) {
+            if (eo2.oneoff[oi].n === draft.editingOnce) {
+              var oldN = eo2.oneoff[oi].n;
+              payload.n = name;
+              eo2.oneoff[oi] = payload;
+              if (oldN !== name) {
+                var fx = eo2.f.indexOf(oldN);
+                if (fx >= 0) eo2.f[fx] = name;
+                if (eo2.fa[oldN] != null) { eo2.fa[name] = eo2.fa[oldN]; delete eo2.fa[oldN]; }
+                if (eo2.m && eo2.m[oldN] != null) { eo2.m[name] = eo2.m[oldN]; delete eo2.m[oldN]; }
+              }
+              break;
+            }
+          }
+          sheet = null; save(); return render();
+        }
         var wasEditing = draft.editing;
         var target = wasEditing ? foodByName(wasEditing) : foodByName(name);
         if (target) {
@@ -1920,9 +2191,36 @@
       if (d.zone) { var e6 = entry(sel), iz = e6.z.indexOf(d.zone);
         if (iz>=0) e6.z.splice(iz,1); else e6.z.push(d.zone); save(); return render(); }
       if (d.food) { var e3 = entry(sel), i1 = e3.f.indexOf(d.food);
-        if (i1>=0) { e3.f.splice(i1,1); delete e3.fa[d.food]; }
+        if (i1>=0) {
+          e3.f.splice(i1,1); delete e3.fa[d.food]; setMeal(e3, d.food, null);
+          for (var oz = (e3.oneoff||[]).length - 1; oz >= 0; oz--) {
+            if (e3.oneoff[oz].n === d.food) e3.oneoff.splice(oz, 1);
+          }
+        }
         else { e3.f.push(d.food); if (!e3.fa[d.food]) e3.fa[d.food] = 1; }
         save(); return render(); }
+      if (d.editonce) {
+        var eod = entry(sel), src2 = null;
+        eod.oneoff.forEach(function (f) { if (f.n === d.editonce) src2 = f; });
+        if (!src2) return;
+        draft = { name: src2.n, flags:(src2.fl||[]).slice(), ingredients:(src2.ing||[]).slice(),
+                  items:(src2.items||[]).map(function(it){return {n:it.n,p:it.p,est:it.est,fl:(it.fl||[]).slice()};}),
+                  raw: src2.raw||"", rawFull: src2.rawFull||"", sz: src2.sz==null?null:src2.sz,
+                  u: src2.u||"g", cat: catOf(src2), catTouched:true, barcode: src2.barcode||"",
+                  labelPhoto:"", dbState:"", fromDB:false, once:true, editing:null, editingOnce:src2.n };
+        return openSheet("food", draft);
+      }
+      if (d.movefood) { mealTarget = d.movefood; return openSheet("meal"); }
+      if (d.setmeal) {
+        var em = entry(sel), val = d.setmeal;
+        if (val === "alone") setMeal(em, mealTarget, null);
+        else if (val.indexOf("with:") === 0) {
+          var partner = val.slice(5), nid = nextMealId(em);
+          if (!em.m) em.m = {};
+          em.m[partner] = nid; em.m[mealTarget] = nid;
+        } else setMeal(em, mealTarget, +val);
+        mealTarget = null; sheet = null; save(); return render();
+      }
       if (d.portion) {
         var e7 = entry(sel), cur = e7.fa[d.portion] || 1;
         cur = Math.round((cur + (+d.pstep)) * 10) / 10;
