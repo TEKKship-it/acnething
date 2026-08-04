@@ -130,6 +130,20 @@
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 8px;
     letter-spacing: .08em; text-transform: uppercase; }
   .pactions { display: flex; gap: 12px; }
+  .grip { flex: 0 0 auto; width: 26px; height: 34px; padding: 0; margin-right: 2px;
+    background: none; border: 0; color: var(--faint); cursor: grab;
+    font-size: 13px; line-height: 1; letter-spacing: -3px;
+    touch-action: none; -webkit-user-select: none; user-select: none; }
+  .grip:active { cursor: grabbing; color: var(--paper); }
+  .prow.dragging { opacity: .35; }
+  .mealcard.dropon { border-color: var(--mark); background: rgba(232,184,75,.10); }
+  .mealcard.newdrop { border-style: dashed; opacity: .65; }
+  .mealcard.newdrop .mealh { color: var(--faint); }
+  .dragghost { position: fixed; z-index: 90; pointer-events: none;
+    background: var(--ink-3); border: 1px solid var(--mark); border-radius: 10px;
+    color: var(--paper); padding: 9px 12px; font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
 
   textarea, input[type=text] { width: 100%; background: var(--ink-2); border: 1px solid var(--line);
     border-radius: 14px; color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; }
@@ -222,6 +236,8 @@
   .ig { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
     color: var(--paper); min-width: 52px; text-align: right; }
   .fbtns { display: flex; flex-direction: column; gap: 6px; }
+  .tag.danger { border-color: var(--flare); color: var(--flare); }
+  .row.dim .rowname { color: var(--paper-dim); }
   .cropc { width: 100%; height: auto; display: block; border-radius: 14px;
     border: 1px solid var(--line); margin: 10px 0 4px; touch-action: none; }
   .ocr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
@@ -259,7 +275,7 @@
 (function () {
   var KEY = "skinlog:v2";
   var state = { days: {}, custom: [], foods: [], presets: [], carry: null, routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
-  var view = "today", sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
+  var view = "today", foodsView = "active", sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
       sheet = null, saveTimer = null, calMonth = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
@@ -380,8 +396,10 @@
   }
 
   // build items with a percentage each: stated where printed, estimated otherwise
+  var ING_PREFIX = /^\s*(ingredien(?:ser|ts|s|ti|zen)?|zutaten|sammans[a\u00e4]ttning|innehåll(?:er)?|contents?)\s*[:.\-\u2013]?\s*/i;
+
   function parseItemList(text) {
-    var chunks = splitItems(text);
+    var chunks = splitItems(String(text || "").replace(ING_PREFIX, ""));
     var items = chunks.map(function (c) {
       var m = c.match(/(\d{1,3}(?:[.,]\d)?)\s*%/);
       var pct = m ? parseFloat(String(m[1]).replace(",", ".")) : null;
@@ -679,6 +697,17 @@
     for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return false;
     return true;
   }
+  function activeFoods() {
+    return state.foods.filter(function (f) { return !f.archived; });
+  }
+  // every one-off ever logged, with the day it belongs to
+  function allOneOffs() {
+    var out = [];
+    Object.keys(state.days).sort().reverse().forEach(function (d) {
+      (state.days[d].oneoff || []).forEach(function (f) { out.push({ d: d, f: f }); });
+    });
+    return out;
+  }
   function effective(e) {
     var out = (e.t||[]).slice();
     (e.f||[]).forEach(function (nm) {
@@ -961,18 +990,19 @@
     h += '</div></div>';
 
     var sel_f = (e && e.f) ? e.f : [];
+    var live = activeFoods();
     h += '<div class="grp"><div class="grph">Your foods</div>';
 
-    if (state.foods.length > 8) {
+    if (live.length > 8) {
       h += '<input type="text" id="fq" class="fq" placeholder="Search your foods…" autocomplete="off">';
     }
 
     var counts = {};
-    state.foods.forEach(function (f) { counts[f.n] = useCount(f.n); });
+    live.forEach(function (f) { counts[f.n] = useCount(f.n); });
 
     // most-used shortcut row once the list gets long
-    if (state.foods.length > 12) {
-      var freq = state.foods.slice().sort(function (a, b) {
+    if (live.length > 12) {
+      var freq = live.slice().sort(function (a, b) {
         return (counts[b.n] - counts[a.n]) || a.n.localeCompare(b.n);
       }).filter(function (f) { return counts[f.n] > 0; }).slice(0, 8);
       if (freq.length) {
@@ -983,7 +1013,7 @@
     }
 
     var buckets = {};
-    state.foods.forEach(function (f) {
+    live.forEach(function (f) {
       var c = catOf(f);
       (buckets[c] = buckets[c] || []).push(f);
     });
@@ -1016,35 +1046,42 @@
       groups.forEach(function (g, gi) {
         var gsum = 0;
         g.foods.forEach(function (nm) {
-          var f0 = foodByName(nm);
+          var f0 = foodByName(nm, e);
           if (f0 && f0.sz && f0.u !== "piece") gsum += ((e.fa && e.fa[nm]) || 1) * f0.sz;
         });
-        h += '<div class="mealcard' + (g.solo ? " solo" : "") + '">'
+        h += '<div class="mealcard' + (g.solo ? " solo" : "") + '" data-drop="' + esc(g.id) + '">'
            + '<div class="mealh">' + (g.solo ? "On its own" : "Meal " + (gi + 1))
            + (gsum ? '<span class="mealg">' + Math.round(gsum) + ' g</span>' : '') + '</div>';
         g.foods.forEach(function (nm) {
-          var f = foodByName(nm), pp = (e.fa && e.fa[nm]) || 1;
+          var f = foodByName(nm, e), pp = (e.fa && e.fa[nm]) || 1;
           var amt = (f && f.sz) ? (Math.round(pp * f.sz * 10) / 10) + " " + (f.u === "piece" ? "pcs" : f.u) : "no portion";
           var once = isOneOff(nm);
-          h += '<div class="prow"><span class="pname">' + esc(nm)
+          h += '<div class="prow" data-row="' + esc(nm) + '">'
+             + '<button class="grip" data-grip="' + esc(nm) + '" aria-label="Drag to group">&#8942;&#8942;</button>'
+             + '<span class="pname">' + esc(nm)
              + (once ? '<span class="oncepill">one-off</span>' : '')
-             + '<span class="pactions">' 
-             + '<button class="pamt" data-movefood="' + esc(nm) + '">' + esc(amt) + ' &middot; move &#8644;</button>'
+             + '<span class="pactions">'
+             + '<button class="pamt" data-movefood="' + esc(nm) + '">' + esc(amt) + '</button>'
              + (once ? '<button class="pamt" data-editonce="' + esc(nm) + '">edit</button>' : '')
-             + '</span></span>' 
+             + '</span></span>'
              + '<button class="mini" data-portion="' + esc(nm) + '" data-pstep="-0.5">&minus;</button>'
              + '<span class="tval">' + (pp % 1 === 0 ? pp : pp.toFixed(1)) + '</span>'
              + '<button class="mini" data-portion="' + esc(nm) + '" data-pstep="0.5">+</button></div>';
         });
         h += '</div>';
       });
+      if (sel_f.length > 1) {
+        h += '<div class="mealcard newdrop" data-drop="new"><div class="mealh">Drag here for a new meal</div></div>';
+      }
       h += '</div>';
-      if (sel_f.length > 1 && groups.length === sel_f.length) {
-        h += '<div class="rowmeta" style="margin-top:8px">Ate any of these together? Tap <b>move</b> '
-           + 'under a food to put it in the same meal as another.</div>';
+      if (sel_f.length > 1) {
+        h += '<div class="rowmeta" style="margin-top:8px">Ate things together? <b>Drag by the '
+           + '&#8942;&#8942; handle</b> onto another meal to group them \u2014 or tap the weight to pick '
+           + 'from a list.</div>';
       }
     }
-    if (!state.foods.length) {
+
+    if (!live.length) {
       h += '<div class="rowmeta" style="margin-top:9px">Add a product once and it lives here as a one-tap button.</div>';
     }
     h += '</div>';
@@ -1092,32 +1129,90 @@
   }
 
   function vFoods() {
-    var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Your foods</h2>'
-      + '<div class="sub">Add a product once. Its ingredients get pooled into groups that can be '
-      + 'compared across everything you eat.</div>'
-      + '<button class="btn go" data-newfood="1">Add a food</button><div style="height:22px"></div>';
-    if (!state.foods.length)
-      h += '<div class="note">Nothing saved yet. On the packet, use your camera to select the '
-         + 'ingredient text and copy it — then paste it in and the groups fill themselves.</div>';
-    var order = state.foods.map(function (f, i) { return { f: f, i: i, c: catOf(f), u: useCount(f.n) }; });
-    order.sort(function (a, b) {
-      var ca = CATS.indexOf(a.c), cb = CATS.indexOf(b.c);
-      if (ca !== cb) return ca - cb;
-      return (b.u - a.u) || a.f.n.localeCompare(b.f.n);
-    });
-    var lastCat = null;
-    order.forEach(function (o) {
-      if (o.c !== lastCat) { lastCat = o.c; h += '<div class="grph" style="margin-top:18px">'+esc(o.c)+'</div>'; }
-      var f = o.f, i = o.i;
-      h += '<div class="row"><div><div class="rowname">'+esc(f.n)
-         + (f.sz ? ' <span class="kind">'+f.sz+' '+(f.u==="piece"?"pcs":f.u)+'</span>' : '')+'</div>'
-         + '<div class="rowmeta">'+(f.fl||[]).map(esc).join(" · ")+'</div>'
-         + '<div class="rowmeta" style="color:var(--faint)">'+esc((f.ing||[]).slice(0,10).join(", "))
-         + ((f.ing||[]).length>10?"…":"")+'</div></div>'
-         + '<div class="fbtns"><button class="tag" data-edit="'+i+'">Edit</button>'
-         + '<button class="tag" data-del="'+i+'">Delete</button></div></div>';
-    });
-    return h+'</div>';
+    var h = '<div class="wrap" style="padding-top:22px"><h2 class="sec">Your foods</h2>';
+
+    var live = activeFoods();
+    var retired = state.foods.filter(function (f) { return f.archived; });
+    var oneoffs = allOneOffs();
+
+    h += '<div class="chips">'
+       + '<button class="chip'+(foodsView==="active"?" on":"")+'" data-foodsview="active">In use ('+live.length+')</button>'
+       + '<button class="chip'+(foodsView==="all"?" on":"")+'" data-foodsview="all">Everything ('
+       + (state.foods.length + oneoffs.length) + ')</button>'
+       + '</div>';
+
+    if (foodsView === "active") {
+      h += '<div class="sub">Add a product once. Its ingredients get pooled into groups you can '
+         + 'compare across everything you eat.</div>'
+         + '<button class="btn go" data-newfood="1">Add a food</button><div style="height:22px"></div>';
+      if (!live.length) {
+        h += '<div class="note">Nothing saved yet. Add one by barcode or by pasting a label.</div>';
+      }
+      var order = live.map(function (f) {
+        return { f: f, i: state.foods.indexOf(f), c: catOf(f), u: useCount(f.n) };
+      });
+      order.sort(function (a, b) {
+        var ca = CATS.indexOf(a.c), cb = CATS.indexOf(b.c);
+        if (ca !== cb) return ca - cb;
+        return (b.u - a.u) || a.f.n.localeCompare(b.f.n);
+      });
+      var lastCat = null;
+      order.forEach(function (o) {
+        if (o.c !== lastCat) { lastCat = o.c; h += '<div class="grph" style="margin-top:18px">'+esc(o.c)+'</div>'; }
+        h += foodRow(o.f, o.i, o.u, false);
+      });
+      if (retired.length) {
+        h += '<div class="rowmeta" style="margin-top:20px">'+retired.length+' retired food'
+           + (retired.length===1?"":"s")+' hidden. See <b>Everything</b>.</div>';
+      }
+      return h + '</div>';
+    }
+
+    // ---- Everything: every food this log has ever referenced
+    h += '<div class="sub">Every food this log has ever used, including retired ones and one-offs. '
+       + 'Retired foods still count in Patterns \u2014 they are only hidden from the Today screen. '
+       + '<b>Erase</b> is different: it strips the food out of every day it was logged on.</div>';
+
+    if (live.length) {
+      h += '<div class="grph" style="margin-top:18px">In use</div>';
+      live.slice().sort(function (a,b) { return useCount(b.n)-useCount(a.n) || a.n.localeCompare(b.n); })
+        .forEach(function (f) { h += foodRow(f, state.foods.indexOf(f), useCount(f.n), false, true); });
+    }
+    if (retired.length) {
+      h += '<div class="grph" style="margin-top:18px">Retired</div>';
+      retired.slice().sort(function (a,b) { return useCount(b.n)-useCount(a.n) || a.n.localeCompare(b.n); })
+        .forEach(function (f) { h += foodRow(f, state.foods.indexOf(f), useCount(f.n), true, true); });
+    }
+    if (oneoffs.length) {
+      h += '<div class="grph" style="margin-top:18px">One-offs</div>';
+      oneoffs.forEach(function (o) {
+        h += '<div class="row"><div><div class="rowname">'+esc(o.f.n)
+           + ' <span class="oncepill">one-off</span></div>'
+           + '<div class="rowmeta">'+esc(longDate(o.d))
+           + (o.f.sz ? ' \u00b7 '+o.f.sz+(o.f.u==="piece"?"pcs":o.f.u) : '')+'</div>'
+           + '<div class="rowmeta" style="color:var(--faint)">'+esc((o.f.fl||[]).join(" \u00b7 "))+'</div></div>'
+           + '<div class="fbtns"><button class="tag" data-pickday="'+esc(o.d)+'">Open day</button>'
+           + '<button class="tag danger" data-purgeonce="'+esc(o.d+"|"+o.f.n)+'">Erase</button></div></div>';
+      });
+    }
+    if (!state.foods.length && !oneoffs.length) {
+      h += '<div class="note">Nothing logged yet.</div>';
+    }
+    return h + '</div>';
+  }
+
+  function foodRow(f, i, used, isRetired, showErase) {
+    return '<div class="row'+(isRetired?" dim":"")+'"><div><div class="rowname">'+esc(f.n)
+      + (f.sz ? ' <span class="kind">'+f.sz+' '+(f.u==="piece"?"pcs":f.u)+'</span>' : '')
+      + (isRetired ? ' <span class="kind">retired</span>' : '')+'</div>'
+      + '<div class="rowmeta">'+(used ? 'on '+used+' day'+(used===1?'':'s') : 'never logged')
+      + ((f.fl||[]).length ? ' \u00b7 '+esc((f.fl||[]).join(" \u00b7 ")) : '')+'</div></div>'
+      + '<div class="fbtns">'
+      + '<button class="tag" data-edit="'+i+'">Edit</button>'
+      + (isRetired ? '<button class="tag" data-restore="'+i+'">Restore</button>'
+                   : '<button class="tag" data-retire="'+i+'">Retire</button>')
+      + (showErase ? '<button class="tag danger" data-purge="'+i+'">Erase</button>' : '')
+      + '</div></div>';
   }
 
   var draft = { name:"", flags:[], ingredients:[], items:[], raw:"", rawFull:"", sz:null, u:"g", barcode:"", labelPhoto:"", dbState:"", editing:null };
@@ -1314,7 +1409,11 @@
         + '<button class="btn" data-parse="1">Read the ingredients</button>'
         + '<input type="file" accept="image/*" capture="environment" id="cam" style="display:none">'
         + '<input type="file" accept="image/*" id="lib" style="display:none">'
-        + '<button class="btnlink" data-cam="1">Or try the built-in reader</button></div>'
+        + '<div class="szrow" style="margin-top:8px">'
+        + '<button class="btn" style="margin:0" data-cam="1">Scan the label</button>'
+        + '<button class="btn" style="margin:0" data-lib="1">Choose a photo</button></div>'
+        + '<div class="rowmeta" style="margin-top:6px">Crop to just the ingredient list when it asks. '
+        + 'Works offline after the first use.</div></div>' 
 
         + breakdownHTML(data)
         + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
@@ -1530,6 +1629,122 @@
       ctx.putImageData(d, 0, 0);
     } catch (e) {}
     return c;
+  }
+
+  // Drag a food by its grip onto another meal card. Pointer events cover touch and mouse;
+  // touch-action is disabled on the grip only, so the rest of the page still scrolls.
+  function setupDrag() {
+    var grips = document.querySelectorAll("[data-grip]");
+    if (!grips.length) return;
+
+    for (var i = 0; i < grips.length; i++) bindGrip(grips[i]);
+
+    function bindGrip(grip) {
+      grip.addEventListener("pointerdown", function (ev) {
+        if (ev.button != null && ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        var name = grip.getAttribute("data-grip");
+        var row = grip.closest(".prow");
+        var startX = ev.clientX, startY = ev.clientY;
+        var moved = false, ghost = null, lastTarget = null;
+
+        try { grip.setPointerCapture(ev.pointerId); } catch (e) {}
+
+        function makeGhost() {
+          var r = row.getBoundingClientRect();
+          ghost = document.createElement("div");
+          ghost.className = "dragghost";
+          ghost.textContent = name;
+          ghost.style.width = r.width + "px";
+          document.body.appendChild(ghost);
+          row.classList.add("dragging");
+        }
+
+        function place(x, y) {
+          if (!ghost) return;
+          ghost.style.left = (x - 40) + "px";
+          ghost.style.top = (y - 22) + "px";
+        }
+
+        function targetAt(x, y) {
+          if (ghost) ghost.style.display = "none";
+          var el = document.elementFromPoint(x, y);
+          if (ghost) ghost.style.display = "";
+          if (!el) return null;
+          var card = el.closest ? el.closest("[data-drop]") : null;
+          return card;
+        }
+
+        function onMove(e2) {
+          var dx = e2.clientX - startX, dy = e2.clientY - startY;
+          if (!moved && Math.sqrt(dx*dx + dy*dy) < 6) return;
+          if (!moved) { moved = true; makeGhost(); }
+          e2.preventDefault();
+          place(e2.clientX, e2.clientY);
+
+          var card = targetAt(e2.clientX, e2.clientY);
+          if (card !== lastTarget) {
+            if (lastTarget) lastTarget.classList.remove("dropon");
+            lastTarget = card;
+            if (card && card.getAttribute("data-drop") !== ownGroupId(name)) card.classList.add("dropon");
+          }
+
+          // nudge the page when dragging near an edge
+          if (window.scrollBy) {
+            var vh = window.innerHeight;
+            if (e2.clientY < 90) window.scrollBy(0, -12);
+            else if (e2.clientY > vh - 110) window.scrollBy(0, 12);
+          }
+        }
+
+        function cleanup() {
+          if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+          if (lastTarget) lastTarget.classList.remove("dropon");
+          row.classList.remove("dragging");
+          grip.removeEventListener("pointermove", onMove);
+          grip.removeEventListener("pointerup", onUp);
+          grip.removeEventListener("pointercancel", onCancel);
+        }
+
+        function onUp(e3) {
+          var card = moved ? targetAt(e3.clientX, e3.clientY) : null;
+          cleanup();
+          if (!moved) return;                       // a tap, not a drag
+          if (!card) return;
+          var dropId = card.getAttribute("data-drop");
+          if (dropId === ownGroupId(name)) return;  // dropped back where it started
+          dropInto(name, dropId);
+        }
+        function onCancel() { cleanup(); }
+
+        grip.addEventListener("pointermove", onMove);
+        grip.addEventListener("pointerup", onUp);
+        grip.addEventListener("pointercancel", onCancel);
+      });
+    }
+  }
+
+  function ownGroupId(name) {
+    var e = state.days[sel];
+    if (!e) return null;
+    return (e.m && e.m[name] != null) ? "g" + e.m[name] : "solo:" + name;
+  }
+
+  function dropInto(name, dropId) {
+    var e = entry(sel);
+    if (dropId === "new") { setMeal(e, name, null); }
+    else if (dropId.indexOf("solo:") === 0) {
+      var partner = dropId.slice(5);
+      if (partner === name) return;
+      var nid = nextMealId(e);
+      if (!e.m) e.m = {};
+      e.m[partner] = nid; e.m[name] = nid;
+    } else {
+      setMeal(e, name, +dropId.slice(1));
+    }
+    save(); render();
   }
 
   function setupCrop() {
@@ -2171,12 +2386,55 @@
         }
         sheet = null; save(); return render();
       }
-      if (d.del) {
-        var f = state.foods[+d.del];
-        if (f && confirm('Delete "'+f.n+'"? Days you already logged it keep the record.')) {
-          state.foods.splice(+d.del,1); save(); render();
+      if (d.retire) {
+        var f = state.foods[+d.retire];
+        if (!f) return;
+        var n5 = useCount(f.n);
+        if (confirm('Retire "'+f.n+'"?\n\nIt disappears from the Today screen but stays in your '
+            + (n5 ? n5+' logged day'+(n5===1?'':'s') : 'history')
+            + ' with all its amounts intact. You can restore it any time.')) {
+          f.archived = true; save(); render();
         }
         return;
+      }
+      if (d.restore) {
+        var fr = state.foods[+d.restore];
+        if (!fr) return;
+        delete fr.archived; save(); return render();
+      }
+      if (d.purge) {
+        var fp = state.foods[+d.purge];
+        if (!fp) return;
+        var np = useCount(fp.n);
+        if (!confirm('Erase "'+fp.n+'" completely?\n\n'
+            + (np ? 'It will be removed from '+np+' logged day'+(np===1?'':'s')+' and those amounts '
+                    + 'will no longer count in Patterns. ' : '')
+            + 'This cannot be undone.')) return;
+        Object.keys(state.days).forEach(function (dk) {
+          var de3 = state.days[dk];
+          if (!de3.f) return;
+          var ix5 = de3.f.indexOf(fp.n);
+          if (ix5 >= 0) { de3.f.splice(ix5,1); delete de3.fa[fp.n]; if (de3.m) delete de3.m[fp.n]; }
+        });
+        (state.presets||[]).forEach(function (ps3) {
+          if (!ps3.f) return;
+          var ix6 = ps3.f.indexOf(fp.n);
+          if (ix6 >= 0) { ps3.f.splice(ix6,1); if (ps3.fa) delete ps3.fa[fp.n]; }
+        });
+        state.foods.splice(+d.purge, 1);
+        save(); return render();
+      }
+      if (d.purgeonce) {
+        var parts = d.purgeonce.split("|"), dayK = parts[0], nameK = parts.slice(1).join("|");
+        var de4 = state.days[dayK];
+        if (!de4) return;
+        if (!confirm('Erase "'+nameK+'" from '+longDate(dayK)+'? This cannot be undone.')) return;
+        var ix7 = (de4.f||[]).indexOf(nameK);
+        if (ix7 >= 0) { de4.f.splice(ix7,1); delete de4.fa[nameK]; if (de4.m) delete de4.m[nameK]; }
+        for (var oz2 = (de4.oneoff||[]).length - 1; oz2 >= 0; oz2--) {
+          if (de4.oneoff[oz2].n === nameK) de4.oneoff.splice(oz2, 1);
+        }
+        save(); return render();
       }
       if (d.view) { view = d.view; sheet = null; return render(); }
       if (d.day) { sel = d.day; return render(); }
@@ -2199,6 +2457,8 @@
         }
         else { e3.f.push(d.food); if (!e3.fa[d.food]) e3.fa[d.food] = 1; }
         save(); return render(); }
+      if (d.foodsview) { foodsView = d.foodsview; return render(); }
+      if (d.pickday) { sel = d.pickday; view = "today"; return render(); }
       if (d.editonce) {
         var eod = entry(sel), src2 = null;
         eod.oneoff.forEach(function (f) { if (f.n === d.editonce) src2 = f; });
@@ -2269,6 +2529,7 @@
     var n = document.getElementById("notes");
     if (n) n.oninput = function () { entry(sel).n = n.value; save(); };
     if (document.getElementById("cropc")) setupCrop();
+    setupDrag();
 
     var cs = document.getElementById("fcat");
     if (cs) cs.onchange = function () { draft.cat = cs.value; draft.catTouched = true; };
