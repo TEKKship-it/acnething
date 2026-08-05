@@ -237,6 +237,18 @@
     color: var(--paper); min-width: 52px; text-align: right; }
   .fbtns { display: flex; flex-direction: column; gap: 6px; }
   .tag.danger { border-color: var(--flare); color: var(--flare); }
+  .tidyblock { border: 1px solid var(--line); border-radius: 14px; padding: 4px 14px 12px;
+    margin-bottom: 12px; background: var(--ink-2); }
+  .tidyblock .row { border-bottom-color: var(--ink-3); }
+  .tidyblock .row:last-of-type { border-bottom: 0; }
+  button.tidyrow { width: 100%; text-align: left; background: none; color: var(--paper);
+    font: inherit; cursor: pointer; }
+  .tidyrow.picked .rowname { color: var(--mark); }
+  .tidybar { position: sticky; bottom: 74px; display: flex; align-items: center; gap: 10px;
+    justify-content: space-between; margin-top: 18px; padding: 12px 14px; border-radius: 14px;
+    background: var(--ink-3); border: 1px solid var(--line); color: var(--paper-dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+  .tidybar.on { border-color: var(--mark); color: var(--paper); }
   .row.dim .rowname { color: var(--paper-dim); }
   .cropc { width: 100%; height: auto; display: block; border-radius: 14px;
     border: 1px solid var(--line); margin: 10px 0 4px; touch-action: none; }
@@ -275,7 +287,7 @@
 (function () {
   var KEY = "skinlog:v2";
   var state = { days: {}, custom: [], foods: [], presets: [], carry: null, routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
-  var view = "today", foodsView = "active", sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
+  var view = "today", foodsView = "active", tidySel = {}, sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
       sheet = null, saveTimer = null, calMonth = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
@@ -701,6 +713,56 @@
     return state.foods.filter(function (f) { return !f.archived; });
   }
   // every one-off ever logged, with the day it belongs to
+  var NAME_NOISE = /\b(med|och|and|with|the|a|an|en|ett|min|my|hemma|homemade|leftover|rest|portion|plate|tallrik|meal|m[a\u00e5]l|lunch|middag|dinner|frukost|breakfast|snack|takeaway|take|away|from|fr[a\u00e5]n|at|p[a\u00e5])\b/g;
+
+  function normName(x) {
+    return fold(x).replace(/[^a-z0-9\s]/g, " ").replace(NAME_NOISE, " ")
+      .replace(/\s+/g, " ").trim();
+  }
+  function nameTokens(x) {
+    return normName(x).split(" ").filter(function (t) { return t.length > 2; });
+  }
+  // token overlap, with a boost when one name contains the other
+  function nameSim(a, b) {
+    var A = nameTokens(a), B = nameTokens(b);
+    if (!A.length || !B.length) return 0;
+    var setB = {}, hit = 0;
+    B.forEach(function (t) { setB[t] = 1; });
+    A.forEach(function (t) {
+      if (setB[t]) { hit++; return; }
+      // catch singular/plural and light typos on longer words
+      for (var k in setB) {
+        if (t.length > 4 && k.length > 4 && (t.indexOf(k) === 0 || k.indexOf(t) === 0)) { hit++; return; }
+      }
+    });
+    var jac = hit / (A.length + B.length - hit);
+    var na = normName(a), nb = normName(b);
+    if (na && nb && (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0)) jac = Math.max(jac, 0.7);
+    return jac;
+  }
+
+  // greedy clusters of one-offs that look like the same dish
+  function clusterOneOffs() {
+    var all = allOneOffs();
+    var byName = {}, order = [];
+    all.forEach(function (o) {
+      if (!byName[o.f.n]) { byName[o.f.n] = { n: o.f.n, days: [], f: o.f }; order.push(byName[o.f.n]); }
+      byName[o.f.n].days.push(o.d);
+    });
+    var used = {}, clusters = [];
+    order.forEach(function (a) {
+      if (used[a.n]) return;
+      var group = [a];
+      used[a.n] = 1;
+      order.forEach(function (b) {
+        if (used[b.n]) return;
+        if (nameSim(a.n, b.n) >= 0.5) { group.push(b); used[b.n] = 1; }
+      });
+      clusters.push(group);
+    });
+    return clusters;
+  }
+
   function allOneOffs() {
     var out = [];
     Object.keys(state.days).sort().reverse().forEach(function (d) {
@@ -1139,7 +1201,11 @@
        + '<button class="chip'+(foodsView==="active"?" on":"")+'" data-foodsview="active">In use ('+live.length+')</button>'
        + '<button class="chip'+(foodsView==="all"?" on":"")+'" data-foodsview="all">Everything ('
        + (state.foods.length + oneoffs.length) + ')</button>'
+       + (oneoffs.length ? '<button class="chip'+(foodsView==="tidy"?" on":"")+'" data-foodsview="tidy">Tidy up ('
+            + oneoffs.length + ')</button>' : '')
        + '</div>';
+
+    if (foodsView === "tidy") return h + tidyHTML() + '</div>';
 
     if (foodsView === "active") {
       h += '<div class="sub">Add a product once. Its ingredients get pooled into groups you can '
@@ -1199,6 +1265,133 @@
       h += '<div class="note">Nothing logged yet.</div>';
     }
     return h + '</div>';
+  }
+
+  function promptMerge(names) {
+    // default to the shortest name — usually the cleanest version
+    var suggested = names.slice().sort(function (a, b) { return a.length - b.length; })[0];
+    var canonical = prompt("Merge these into one food:\n\n  " + names.join("\n  ")
+      + "\n\nName it:", suggested);
+    if (!canonical || !canonical.trim()) return;
+    canonical = canonical.trim();
+    mergeOneOffs(names, canonical);
+    // drop straight into the editor so the ingredients can go in once
+    var made = null;
+    state.foods.forEach(function (f) { if (f.n === canonical) made = f; });
+    if (made) {
+      draft = { name: made.n, flags:(made.fl||[]).slice(), ingredients:(made.ing||[]).slice(),
+                items:(made.items||[]).map(function(it){return {n:it.n,p:it.p,est:it.est,fl:(it.fl||[]).slice()};}),
+                raw: made.raw||"", rawFull: made.rawFull||"", sz: made.sz==null?null:made.sz,
+                u: made.u||"g", cat: catOf(made), catTouched:true, barcode: made.barcode||"",
+                labelPhoto:"", dbState:"", fromDB:false, once:false,
+                editing: made.n, editingOnce:null };
+      foodsView = "active";
+      return openSheet("food", draft);
+    }
+    render();
+  }
+
+  function tidyHTML() {
+    var clusters = clusterOneOffs();
+    if (!clusters.length) return '<div class="note">No one-off meals to tidy.</div>';
+
+    var h = '<div class="sub">One-off meals you logged without ingredients. Tick the ones that are the '
+      + 'same dish and merge them into a single saved food \u2014 then you only have to enter the '
+      + 'ingredients once, and it applies to every day.</div>';
+
+    var suggested = clusters.filter(function (c) { return c.length > 1; });
+    var singles = clusters.filter(function (c) { return c.length === 1; });
+
+    if (suggested.length) {
+      h += '<div class="grph" style="margin-top:18px">Look like the same dish</div>';
+      suggested.forEach(function (group, gi) {
+        h += '<div class="tidyblock">';
+        group.forEach(function (item) {
+          h += tidyRow(item);
+        });
+        h += '<button class="btn" data-mergegroup="'+gi+'">Merge these '+group.length+'</button></div>';
+      });
+    }
+    if (singles.length) {
+      h += '<div class="grph" style="margin-top:18px">Everything else</div>';
+      singles.forEach(function (g) { h += tidyRow(g[0]); });
+    }
+
+    var n = Object.keys(tidySel).filter(function (k) { return tidySel[k]; }).length;
+    h += '<div class="tidybar' + (n ? " on" : "") + '">'
+       + '<span>' + (n ? n + ' selected' : 'Tick any two or more to merge') + '</span>'
+       + (n > 1 ? '<button class="btn go" style="margin:0;width:auto;padding:10px 16px" data-mergesel="1">Merge</button>' : '')
+       + (n ? '<button class="btn" style="margin:0;width:auto;padding:10px 14px" data-tidyclear="1">Clear</button>' : '')
+       + '</div>';
+    return h;
+  }
+
+  function tidyRow(item) {
+    var on = !!tidySel[item.n];
+    var hasIng = (item.f.items || []).length > 0;
+    return '<button class="row tidyrow' + (on ? " picked" : "") + '" data-tidy="' + esc(item.n) + '">'
+      + '<div><div class="rowname">' + (on ? '\u2713 ' : '') + esc(item.n)
+      + (hasIng ? ' <span class="kind">has ingredients</span>' : '') + '</div>'
+      + '<div class="rowmeta">' + item.days.length + ' day' + (item.days.length === 1 ? '' : 's')
+      + ' \u00b7 ' + esc(item.days.map(function (d) {
+          return parseD(d).toLocaleDateString(undefined, { day: "numeric", month: "short" }); }).join(", "))
+      + (item.f.sz ? ' \u00b7 ' + item.f.sz + (item.f.u === "piece" ? "pcs" : item.f.u) : '')
+      + '</div></div></button>';
+  }
+
+  function mergeOneOffs(names, canonical) {
+    if (!names.length) return;
+    // prefer whichever version already has ingredient data
+    var best = null;
+    names.forEach(function (nm) {
+      allOneOffs().forEach(function (o) {
+        if (o.f.n !== nm) return;
+        if (!best || ((o.f.items || []).length > (best.items || []).length)) best = o.f;
+      });
+    });
+    if (!best) return;
+
+    var merged = JSON.parse(JSON.stringify(best));
+    merged.n = canonical;
+    merged.cat = merged.cat || guessCat(merged.fl, merged.u);
+    delete merged.archived;
+
+    var existing = null;
+    state.foods.forEach(function (f) { if (f.n === canonical) existing = f; });
+    if (existing) { for (var k in merged) if (k !== "n") existing[k] = merged[k]; }
+    else state.foods.push(merged);
+
+    // rewrite every day: rename the entries, drop the one-off definitions
+    Object.keys(state.days).forEach(function (d) {
+      var e = state.days[d];
+      if (!e.f) return;
+      var portion = null, mealId = null, touchedDay = false;
+      names.forEach(function (nm) {
+        var ix = e.f.indexOf(nm);
+        if (ix < 0) return;
+        touchedDay = true;
+        if (portion == null) portion = (e.fa && e.fa[nm]) || 1;
+        if (mealId == null && e.m && e.m[nm] != null) mealId = e.m[nm];
+        e.f.splice(ix, 1);
+        if (e.fa) delete e.fa[nm];
+        if (e.m) delete e.m[nm];
+      });
+      if (!touchedDay) return;
+      if (e.f.indexOf(canonical) < 0) e.f.push(canonical);
+      e.fa = e.fa || {};
+      if (e.fa[canonical] == null) e.fa[canonical] = portion == null ? 1 : portion;
+      if (mealId != null) { e.m = e.m || {}; e.m[canonical] = mealId; }
+      for (var oi = (e.oneoff || []).length - 1; oi >= 0; oi--) {
+        if (names.indexOf(e.oneoff[oi].n) >= 0) e.oneoff.splice(oi, 1);
+      }
+      if (e.m) {
+        var counts = {};
+        for (var mk in e.m) counts[e.m[mk]] = (counts[e.m[mk]] || 0) + 1;
+        for (var mk2 in e.m) if (counts[e.m[mk2]] < 2) delete e.m[mk2];
+      }
+    });
+    tidySel = {};
+    save();
   }
 
   function foodRow(f, i, used, isRetired, showErase) {
@@ -1415,12 +1608,7 @@
         + '<div class="rowmeta" style="margin-top:6px">Crop to just the ingredient list when it asks. '
         + 'Works offline after the first use.</div></div>' 
 
-        + breakdownHTML(data)
-        + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
-      FLAGS.forEach(function (fl) {
-        h += '<button class="tag'+((data.flags||[]).indexOf(fl)>=0?" on":"")+'" data-flag="'+esc(fl)+'">'+esc(fl)+'</button>';
-      });
-      h += '</div></div>'
+        + '<div id="livearea">' + liveAreaHTML(data) + '</div>'
         + (data.editing || data.editingOnce ? ''
             : '<div class="grp"><div class="grph">Keep it?</div>'
               + '<div class="sev">'
@@ -1436,6 +1624,25 @@
         + '<button class="btn" data-close="1">Cancel</button>';
     }
     return h+'</div></div>';
+  }
+
+  function liveAreaHTML(data) {
+    var h = breakdownHTML(data)
+      + '<div class="grp" style="margin-top:18px"><div class="grph">Groups</div><div class="tags">';
+    FLAGS.forEach(function (fl) {
+      h += '<button class="tag'+((data.flags||[]).indexOf(fl)>=0?" on":"")+'" data-flag="'+esc(fl)+'">'+esc(fl)+'</button>';
+    });
+    return h + '</div></div>';
+  }
+
+  function refreshLive() {
+    var host = document.getElementById("livearea");
+    if (!host) return;
+    var act = document.activeElement;
+    if (act && act.id && act.id.indexOf("ip") === 0) return;   // mid-edit on a percentage
+    host.innerHTML = liveAreaHTML(draft);
+    var cs = document.getElementById("fcat");
+    if (cs && !draft.catTouched) cs.value = guessCat(draft.flags, draft.u);
   }
 
   function breakdownHTML(data) {
@@ -2458,6 +2665,18 @@
         else { e3.f.push(d.food); if (!e3.fa[d.food]) e3.fa[d.food] = 1; }
         save(); return render(); }
       if (d.foodsview) { foodsView = d.foodsview; return render(); }
+      if (d.tidy) { tidySel[d.tidy] = !tidySel[d.tidy]; return render(); }
+      if (d.tidyclear) { tidySel = {}; return render(); }
+      if (d.mergegroup) {
+        var cl = clusterOneOffs().filter(function (c) { return c.length > 1; })[+d.mergegroup];
+        if (!cl) return;
+        return promptMerge(cl.map(function (x) { return x.n; }));
+      }
+      if (d.mergesel) {
+        var picked = Object.keys(tidySel).filter(function (k) { return tidySel[k]; });
+        if (picked.length < 2) return;
+        return promptMerge(picked);
+      }
       if (d.pickday) { sel = d.pickday; view = "today"; return render(); }
       if (d.editonce) {
         var eod = entry(sel), src2 = null;
@@ -2533,6 +2752,29 @@
 
     var cs = document.getElementById("fcat");
     if (cs) cs.onchange = function () { draft.cat = cs.value; draft.catTouched = true; };
+
+    var fing = document.getElementById("fing");
+    if (fing) {
+      fing.oninput = function () {
+        clearTimeout(fing._t);
+        fing._t = setTimeout(function () {
+          draft.raw = fing.value;
+          rebuildDraft();
+          refreshLive();
+        }, 400);
+      };
+    }
+    var fsz = document.getElementById("fsz");
+    if (fsz) {
+      fsz.oninput = function () {
+        clearTimeout(fsz._t);
+        fsz._t = setTimeout(function () {
+          var v = parseFloat(String(fsz.value).replace(",", "."));
+          draft.sz = isNaN(v) ? null : v;
+          refreshLive();
+        }, 300);
+      };
+    }
 
     var q = document.getElementById("fq");
     if (q) {
