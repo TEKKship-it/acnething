@@ -218,6 +218,14 @@
     letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
   select.wide { width: 100%; background: var(--ink-2); border: 1px solid var(--line);
     border-radius: 14px; color: var(--paper); padding: 12px 14px; font: inherit; font-size: 16px; }
+  .hits { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .hit { display: block; width: 100%; text-align: left; padding: 11px 13px; background: var(--ink-2);
+    border: 0; border-bottom: 1px solid var(--ink-3); color: var(--paper); cursor: pointer; font: inherit; }
+  .hit:last-child { border-bottom: 0; }
+  .hit:active { background: var(--ink-3); }
+  .hitn { display: block; font-size: 14px; line-height: 1.3; }
+  .hitb { display: block; font-size: 11px; color: var(--paper-dim); margin-top: 2px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   .dblink { display: inline-block; margin-top: 8px; color: var(--mark); font-size: 13px; }
   .btnlink { display: block; width: 100%; margin-top: 8px; padding: 8px 0; background: none;
     border: 0; color: var(--paper-dim); cursor: pointer; text-align: left;
@@ -526,6 +534,64 @@
                p: pct, est: ing.percent == null,
                fl: flagsFor((ing.text || "") + " " + idsToText([ing.id])) };
     });
+  }
+
+  // Text search against Open Food Facts. v2 has no full-text endpoint, so this uses the
+  // legacy search.pl, hitting the Swedish subdomain first since that is where he shops.
+  var searchHits = [], searchBusy = false, searchScope = "se";
+
+  function searchProducts(q) {
+    q = String(q || "").trim();
+    if (q.length < 3) { ocrStatus("Type at least three letters."); return; }
+    searchBusy = true; searchHits = [];
+    ocrStatus("Searching\u2026");
+    refreshResults();
+
+    var host = searchScope === "se" ? "https://se.openfoodfacts.org" : "https://world.openfoodfacts.org";
+    var url = host + "/cgi/search.pl?search_terms=" + encodeURIComponent(q)
+            + "&search_simple=1&action=process&json=1&page_size=25&fields="
+            + encodeURIComponent("code,product_name,brands,quantity,product_quantity,product_quantity_unit,nutriments");
+
+    var req = state.reader
+      ? fetch(state.reader, { method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ search: q, scope: searchScope }) })
+      : fetch(url, { headers: { "Accept": "application/json" } });
+
+    req.then(function (r) { return r.json(); }).then(function (j) {
+      searchBusy = false;
+      var list = (j && j.products) || [];
+      searchHits = list.filter(function (pr) { return pr.product_name; }).slice(0, 20);
+      if (!searchHits.length) {
+        ocrStatus(searchScope === "se"
+          ? "Nothing in the Swedish listings. Try the worldwide search, or scan the barcode."
+          : "No matches. Try fewer words, or scan the barcode.");
+      } else ocrStatus("");
+      refreshResults();
+    }).catch(function () {
+      searchBusy = false;
+      ocrStatus("Couldn't reach the food database. Check your connection.");
+      refreshResults();
+    });
+  }
+
+  function resultsHTML() {
+    if (searchBusy) return '<div class="rowmeta" style="margin-top:8px">Searching\u2026</div>';
+    if (!searchHits.length) return "";
+    var h = '<div class="hits">';
+    searchHits.forEach(function (pr, i) {
+      var q = pr.product_quantity ? Math.round(pr.product_quantity) + (pr.product_quantity_unit || "g")
+                                  : (pr.quantity || "");
+      h += '<button class="hit" data-hit="' + i + '">'
+         + '<span class="hitn">' + esc(pr.product_name) + '</span>'
+         + '<span class="hitb">' + esc([pr.brands ? String(pr.brands).split(",")[0].trim() : "", q]
+             .filter(Boolean).join(" \u00b7 ")) + '</span></button>';
+    });
+    return h + '</div>';
+  }
+
+  function refreshResults() {
+    var host = document.getElementById("results");
+    if (host) host.innerHTML = resultsHTML();
   }
 
   function lookupBarcode(code) {
@@ -1563,7 +1629,16 @@
       h += '<h2 class="sec">'+(data.editing?"Edit food":"Add a food")+'</h2>'
         + '<input type="text" id="fname" value="'+esc(data.name||"")+'" placeholder="Name it — e.g. protein bar">'
 
-        + '<div class="grp" style="margin-top:18px"><div class="grph">Barcode</div>'
+        + '<div class="grp" style="margin-top:18px"><div class="grph">Find it in the database</div>'
+        + '<div class="szrow">'
+        + '<input type="text" id="fsearch" placeholder="e.g. ICA havregryn, Oatly, Big Mac" autocomplete="off">'
+        + '<button class="btn" style="margin:0;width:auto;padding:12px 16px" data-search="1">Search</button></div>'
+        + '<div class="chips" style="margin:8px 0 0">'
+        + '<button class="chip'+(searchScope==="se"?" on":"")+'" data-scope="se">Sweden</button>'
+        + '<button class="chip'+(searchScope==="world"?" on":"")+'" data-scope="world">Worldwide</button></div>'
+        + '<div id="results">' + resultsHTML() + '</div></div>'
+
+        + '<div class="grp"><div class="grph">Barcode</div>' 
         + '<div class="szrow">'
         + '<input type="text" inputmode="numeric" id="fbc" value="'+esc(data.barcode||"")+'" placeholder="13 digits from the pack">'
         + '<button class="btn" style="margin:0;width:auto;padding:12px 16px" data-lookup="1">Look up</button>'
@@ -2362,7 +2437,7 @@
         state.routine = { am: am?am.value.trim():"", pm: pm?pm.value.trim():"", notes: no?no.value.trim():"" };
         sheet = null; save(); return render();
       }
-      if (d.newfood) { draft = {name:"",flags:[],ingredients:[],items:[],raw:"",rawFull:"",
+      if (d.newfood) { searchHits = []; draft = {name:"",flags:[],ingredients:[],items:[],raw:"",rawFull:"",
         sz:null,u:"g",cat:"",catTouched:false,barcode:"",labelPhoto:"",dbState:"",fromDB:false,
         once:(d.newfood==="once"),editing:null,editingOnce:null}; return openSheet("food"); }
       if (d.edit) {
@@ -2500,6 +2575,29 @@
         save(); return render();
       }
       if (d.once != null) { grabDraft(); draft.once = (d.once === "1"); return openSheet("food", draft); }
+      if (d.search) {
+        grabDraft();
+        var sb = document.getElementById("fsearch");
+        return searchProducts(sb ? sb.value : "");
+      }
+      if (d.scope) {
+        searchScope = d.scope;
+        grabDraft();
+        var sb2 = document.getElementById("fsearch");
+        var q2 = sb2 ? sb2.value : "";
+        openSheet("food", draft);
+        var sb3 = document.getElementById("fsearch");
+        if (sb3) sb3.value = q2;
+        if (q2.trim().length > 2) searchProducts(q2);
+        return;
+      }
+      if (d.hit) {
+        var pick = searchHits[+d.hit];
+        if (!pick) return;
+        grabDraft();
+        searchHits = [];
+        return lookupBarcode(pick.code);
+      }
       if (d.lookup) { grabDraft(); return lookupBarcode(draft.barcode); }
       if (d.bcscan) return scanBarcode();
       if (d.recount) { grabDraft(); rebuildDraft(); return openSheet("food", draft); }
@@ -2752,6 +2850,13 @@
 
     var cs = document.getElementById("fcat");
     if (cs) cs.onchange = function () { draft.cat = cs.value; draft.catTouched = true; };
+
+    var fs = document.getElementById("fsearch");
+    if (fs) {
+      fs.onkeydown = function (ev) {
+        if (ev.key === "Enter") { ev.preventDefault(); grabDraft(); searchProducts(fs.value); }
+      };
+    }
 
     var fing = document.getElementById("fing");
     if (fing) {
