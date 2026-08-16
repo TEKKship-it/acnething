@@ -125,6 +125,7 @@
   .tag.once { border-color: var(--calm); color: var(--calm); }
   .tag.once.on { background: var(--calm); border-color: var(--calm); color: #0A2620; }
   .tag.once.dash { border-style: dashed; }
+  .xn { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; opacity: .8; }
   .oncepill { display: inline-block; margin-left: 7px; padding: 1px 5px; border-radius: 5px;
     border: 1px solid var(--calm); color: var(--calm); vertical-align: 1px;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 8px;
@@ -323,7 +324,7 @@
   var FLAGS = ["Dairy","Whey / casein","Egg","Soy","Gluten / wheat","Added sugar","High sugar",
     "Artificial sweetener","Cocoa / chocolate","Nuts","Seed oils","Palm oil","Fried / high fat",
     "Caffeine","Alcohol","Iodine-rich","Additives / preservatives","Spicy","Fermented",
-    "Red meat","Fish / seafood","Whole grain","Fruit / veg","Highly processed"];
+    "Red meat","Fish / seafood","Whole grain","Fruit / veg","Highly processed","High GI"];
 
   // offline ingredient matcher — no network, no API key
   // OCR mangles diacritics, so match against a folded ASCII form of the text
@@ -336,24 +337,28 @@
     ["Whey / casein", /whey|vassle|casein|kasein|mjolkprotein|milk protein/],
     ["Egg", /\begg|\bagg\b|aggula|aggvita|albumen|aggpulver/],
     ["Soy", /\bsoy|\bsoja/],
-    ["Gluten / wheat", /wheat|\bvete|durum|gluten|barley|\bkorn\b|\brye\b|\brag\b|ragmjol|semolina|spelt|dinkel|mannagryn/],
-    ["Added sugar", /sugar|socker|syrup|sirap|dextros|dextrose|fruktos|fructose|glukos|glucose|maltodextrin|honey|honung|molasses|melass|invertsocker|sucrose|maltose|agavesirap/],
+    ["Gluten / wheat", /wheat|vete|durum|gluten|barley|\bkorn\b|kornmalt|kornmjol|korngryn|\brye\b|\brag\b|ragmjol|ragsikt|ragkross|ragflingor|fullkornsrag|rugbrod|brod\b|bulle|fralla|baguette|croissant|croussaint|ciabatta|toast|limpa|pannkak|vafflor|kex\b|pasta\b|nudlar|couscous|bulgur|semolina|spelt|dinkel|mannagryn/],
+    ["Added sugar", /sugar|socker(?!kulor)|syrup|sirap|\bdextros|\bdextrose|fruktos|fructose|glukos|glucose|maltodextrin|honey|honung|molasses|melass|invertsocker|sucrose|maltose|agavesirap/],
     ["Artificial sweetener", /aspartam|sucralos|sukralos|acesulfam|saccharin|sackarin|stevia|steviol|sorbitol|xylitol|maltitol|erytritol|erythritol|sotningsmedel|sweetener/],
     ["Cocoa / chocolate", /cocoa|cacao|kakao|chocolate|choklad/],
     ["Nuts", /almond|mandel|hazelnut|hasselnot|peanut|jordnot|cashew|walnut|valnot|pistachio|pistage|pecan|pekan|\bnuts\b|\bnotter\b|nougat/],
     ["Seed oils", /sunflower oil|solrosolja|rapeseed|rapsolja|canola|soybean oil|sojaolja|corn oil|majsolja|safflower|seed oil|vegetabilisk olja|vegetable oil/],
     ["Palm oil", /palm oil|palmolja|palm fat|palmfett|palm kernel|palmkarn/],
     ["Fried / high fat", /\bfried|friterad|\bstekt\b|shortening|panerad/],
-    ["Caffeine", /caffeine|koffein|coffee|\bkaffe|guarana|green tea extract|teextrakt/],
-    ["Alcohol", /ethanol|etanol|alkohol|\bwine\b|\bvin\b|\bbeer\b|whisky|vodka|\brum\b|likor|liqueur/],
+    ["Caffeine", /caffeine|koffein|coffee|\bkaffe|guarana|green tea extract|teextrakt|matcha|gront te|green tea|\bte\b|espresso|cappuccino|energidryck/],
+    ["Alcohol", /ethanol|etanol|alkohol|\bwine\b|\bvin\b|\bbeer\b|whisky|vodka|\brum\b|likor|liqueur|appelvin|paronvin|\bcider\b|starkol|folkol|snaps|\bgin\b|tequila|prosecco|champagne/],
     ["Iodine-rich", /seaweed|kelp|\bnori\b|\btang\b|alger|iodi[sz]ed|jodid|joderat/],
-    ["Additives / preservatives", /\be\d{3}|preservative|konserveringsmedel|stabili[sz]|stabiliseringsmedel|emulsifier|emulgeringsmedel|fortjockningsmedel|fortjockning|flavou?ring|\barom\b|antioxidationsmedel|surhetsreglerande|smakforstarkare|anti-?caking|colou?r \(|fargamne/],
+    ["Additives / preservatives", /\be\d{3}|preservative|konserveringsmedel|stabili[sz]|stabiliseringsmedel|emulsifier|emulgeringsmedel|fortjockningsmedel|fortjockning|flavou?ring|\barom\b|antioxidationsmedel|surhetsreglerande|smakforstarkare|anti-?caking|colou?r \(|fargamne|mjolbehandlingsmedel|behandlingsmedel|sulfit|svaveldioxid/],
     ["Spicy", /chill?i|cayenne|jalapeno|sriracha|harissa|capsic|\bstark\b/],
-    ["Fermented", /fermented|fermenterad|kimchi|\bmiso\b|kefir|sourdough|surdeg|kombucha|syrningskultur/],
-    ["Red meat", /\bbeef\b|notkott|\bpork\b|\bflask|\blamb\b|\blamm\b|bacon|\bham\b|skinka|salami|\bveal\b|\bkalv\b|mince|kottfars|korv/],
+    ["Fermented", /fermented|fermenterad|kimchi|\bmiso\b|kefir|sourdough|surdeg|kombucha|syrningskultur|syrakultur|yoghurtkultur|jogurtkultur|bakteriekultur|levande kultur/],
+    ["Red meat", /\bbeef\b|notkott|\bpork\b|\bflask|\blamb\b|\blamm\b|bacon|\bham\b|skinka|salami|\bveal\b|\bkalv\b|mince|kottfars|notfars|blandfars|flaskfars|korv|oxfile|oxkott|oxstek|\box\b|entrecote|ryggbiff|hogrev|\bbiff|rostbiff|prosciutto|chorizo/],
     ["Fish / seafood", /salmon|\blax\b|tuna|tonfisk|\bcod\b|torsk|shrimp|prawn|\brak(?:or)?\b|\bfish\b|\bfisk|anchov|ansjovis|sardin|mackerel|makrill|\bsill\b/],
-    ["Whole grain", /wholegrain|whole ?grain|wholemeal|fullkorn|\boats?\b|havre|brown rice|brunt ris|quinoa|bulgur/],
-    ["Fruit / veg", /tomat|tomato|apple|\bapple\b|banan|berr|\bbar\b|carrot|morot|spinach|spenat|broccoli|orange|mango|lentil|linser|\bbeans?\b|bonor|arter\b|paprika|zucchini|aubergin/]
+    ["Whole grain", /wholegrain|whole ?grain|wholemeal|fullkorn|\boats?\b|havre(?!fiber|kli)|brown rice|brunt ris|quinoa|bulgur/],
+    // Glycaemic index is a property of the food, not just "contains carbohydrate".
+    // Refined flour, free sugars, potato and enzyme-treated oat drink are high;
+    // bran, whole grain, sourdough, lentil pasta and brown rice are not (see LOW_GI).
+    ["High GI", /vetemjol|vitt brod|rostbrod|hamburgerbrod|skallat vetemjol|vitt ris|socker(?!kulor)|sirap|glukos|\bdextros|maltodextrin|honung|potatis|majsstarkelse|modifierad starkelse|havredryck|instantiserade havregryn|havrepuffar|kornmalt|malt av korn|cornflakes|puffat ris|rostat ris/],
+    ["Fruit / veg", /tomat|tomato|apple|appel|apelsin|banan|berr|\bbar\b|jordgubb|hallon|bl[a\u00e5]bar|lingon|vindruv|melon|ananas|persika|plommon|\bkiwi\b|paron|carrot|morot|spinach|spenat|broccoli|orange|mango|lentil|linser|\bbeans?\b|bonor|boner|\barter\b|paprika|zucchini|aubergin|gurka|\bsallad|gronsak|avokado|avocado|\blok\b|purjolok|graslok|rodlok|schalottenlok|groddar|sprouts|rattika|\bkal\b|rabarber|champinjon|\bsvamp|lettuce|cucumber|onion|mushroom|vegetable/]
   ];
 
   var UNITS = [["g","g"],["ml","ml"],["piece","pcs"]];
@@ -377,7 +382,10 @@
 
   function useCount(name) {
     var n = 0;
-    for (var d in state.days) { var e = state.days[d]; if (e.f && e.f.indexOf(name) >= 0) n++; }
+    for (var d in state.days) {
+      var e = state.days[d];
+      if (e.f && slotsFor(e, name).length) n++;
+    }
     return n;
   }
 
@@ -409,9 +417,31 @@
               .filter(function (x) { return x.length > 1; });
   }
 
+  // "sockerfri sirap" must not read as sugar just because it says sirap
+  // these pull a food out of High GI even when a high-GI word is present
+  var LOW_GI = /fullkorn|gula linser|linspasta|\bkli\b|vetekli|ragmjol|\brag\b|surdeg|brunt ris|linfro|solrosfro|bonor|linser/;
+
+  var NO_GLUTEN = /glutenfri|gluten[\s-]?free|utan gluten/;
+
+  var NO_ALCOHOL = /alkoholfri|alkoholfritt|non-?alcoholic|utan alkohol/;
+
+  var NO_SUGAR = /sockerfri|osockrad|osotad|utan socker|utan tillsatt socker|sugar[\s-]?free|no added sugar|zero sugar/;
+
   function flagsFor(text) {
     var t = fold(text), out = [];
     RULES.forEach(function (r) { if (r[1].test(t)) out.push(r[0]); });
+    if (NO_SUGAR.test(t)) {
+      out = out.filter(function (f) { return f !== "Added sugar" && f !== "High sugar" && f !== "High GI"; });
+    }
+    if (LOW_GI.test(t)) {
+      out = out.filter(function (f) { return f !== "High GI"; });
+    }
+    if (NO_ALCOHOL.test(t)) {
+      out = out.filter(function (f) { return f !== "Alcohol"; });
+    }
+    if (NO_GLUTEN.test(t)) {
+      out = out.filter(function (f) { return f !== "Gluten / wheat"; });
+    }
     return out;
   }
 
@@ -421,10 +451,10 @@
   function parseItemList(text) {
     var chunks = splitItems(String(text || "").replace(ING_PREFIX, ""));
     var items = chunks.map(function (c) {
-      var m = c.match(/(\d{1,3}(?:[.,]\d)?)\s*%/);
+      var m = c.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%/);
       var pct = m ? parseFloat(String(m[1]).replace(",", ".")) : null;
       if (pct !== null && (pct <= 0 || pct > 100)) pct = null;
-      var name = c.replace(/\s*\d{1,3}(?:[.,]\d)?\s*%\s*/, " ").replace(/\s{2,}/g, " ").trim();
+      var name = c.replace(/\s*\d{1,3}(?:[.,]\d{1,2})?\s*%\s*/, " ").replace(/\s{2,}/g, " ").trim();
       return { n: name || c.trim(), p: pct, est: false, fl: flagsFor(c) };
     });
 
@@ -450,10 +480,13 @@
     // sugar early in the list = high sugar
     var parts = t.split(/[,;\n•·]+/).map(function (s) { return s.trim(); }).filter(Boolean);
     var firstThree = fold(parts.slice(0, 3).join(" "));
-    if (/sugar|syrup|dextros|fruktos|glukos|socker|sirap/.test(firstThree)) flags.push("High sugar");
+    if (/sugar|syrup|\bdextros|fruktos|glukos|socker|sirap/.test(firstThree)
+        && !NO_SUGAR.test(firstThree)) flags.push("High sugar");
     // additive count plus list length is a decent proxy for processing
     var eCount = (t.match(/\be\d{3}/g) || []).length;
-    if (eCount >= 2 || (eCount >= 1 && parts.length >= 7) || parts.length >= 14) flags.push("Highly processed");
+    var addClasses = (t.match(/sotningsmedel|fargamne|konserveringsmedel|stabiliseringsmedel|emulgeringsmedel|fortjocknings|surhetsreglerande|smakforstarkare|fuktighetsbevarande|fyllnadsmedel|antioxidationsmedel/g) || []).length;
+    if (eCount >= 2 || (eCount >= 1 && parts.length >= 7) || parts.length >= 14 || addClasses >= 3)
+      flags.push("Highly processed");
     return { flags: flags.filter(function (f, i, a) { return a.indexOf(f) === i; }), parts: parts };
   }
 
@@ -759,7 +792,19 @@
   }
   function touched(e) { return !!e && (e.k || e.c != null || (e.t&&e.t.length) || (e.f&&e.f.length)); }
   // a one-off is stored on the day itself (e.deposit) instead of the saved library
-  function foodByName(n, e) {
+  // a day can hold the same food more than once; extra servings get a #n suffix
+  function baseName(k) { var m = /^(.*)#\d+$/.exec(String(k)); return m ? m[1] : String(k); }
+  function slotsFor(e, name) {
+    return ((e && e.f) || []).filter(function (k) { return baseName(k) === name; });
+  }
+  function freshSlot(e, name) {
+    var used = (e.f || []), i = 2, k = name;
+    while (used.indexOf(k) >= 0) { k = name + "#" + i; i++; }
+    return k;
+  }
+
+  function foodByName(nRaw, e) {
+    var n = baseName(nRaw);
     for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return state.foods[i];
     var scope = e || state.days[sel];
     if (scope && scope.oneoff) { for (var j=0;j<scope.oneoff.length;j++) if (scope.oneoff[j].n===n) return scope.oneoff[j]; }
@@ -771,7 +816,8 @@
     }
     return null;
   }
-  function isOneOff(n) {
+  function isOneOff(nRaw) {
+    var n = baseName(nRaw);
     for (var i=0;i<state.foods.length;i++) if (state.foods[i].n===n) return false;
     return true;
   }
@@ -875,7 +921,7 @@
     var f = foodByName(nm, e);
     if (!f || !f.sz || f.u === "piece") return 0;
     var grams = ((e.fa && e.fa[nm]) || 1) * f.sz;
-    if (nm === t) return grams;
+    if (baseName(nm) === t) return grams;
     if (!f.items || !f.items.length) return 0;
     var pct = 0;
     f.items.forEach(function (it) { if ((it.fl || []).indexOf(t) >= 0) pct += (it.p || 0); });
@@ -1052,7 +1098,7 @@
     var carriedOnce = {};
     (c.oneoff || []).forEach(function (f) { carriedOnce[f.n] = true; });
     (c.f || []).forEach(function (x) {
-      if (!carriedOnce[x] && !foodByName(x)) return;   // library food deleted in the meantime
+      if (!carriedOnce[baseName(x)] && !foodByName(x)) return;   // library food deleted in the meantime
       if (tgt.f.indexOf(x) < 0) tgt.f.push(x);
       if (tgt.fa[x] == null) tgt.fa[x] = (c.fa && c.fa[x]) || 1;
     });
@@ -1183,14 +1229,15 @@
         g.foods.forEach(function (nm) {
           var f = foodByName(nm, e), pp = (e.fa && e.fa[nm]) || 1;
           var amt = (f && f.sz) ? (Math.round(pp * f.sz * 10) / 10) + " " + (f.u === "piece" ? "pcs" : f.u) : "no portion";
-          var once = isOneOff(nm);
+          var once = isOneOff(nm), disp = baseName(nm);
           h += '<div class="prow" data-row="' + esc(nm) + '">'
              + '<button class="grip" data-grip="' + esc(nm) + '" aria-label="Drag to group">&#8942;&#8942;</button>'
-             + '<span class="pname">' + esc(nm)
+             + '<span class="pname">' + esc(disp)
              + (once ? '<span class="oncepill">one-off</span>' : '')
              + '<span class="pactions">'
              + '<button class="pamt" data-movefood="' + esc(nm) + '">' + esc(amt) + '</button>'
-             + (once ? '<button class="pamt" data-editonce="' + esc(nm) + '">edit</button>' : '')
+             + '<button class="pamt" data-again="' + esc(nm) + '">again +</button>'
+             + (once ? '<button class="pamt" data-editonce="' + esc(baseName(nm)) + '">edit</button>' : '')
              + '</span></span>'
              + '<button class="mini" data-portion="' + esc(nm) + '" data-pstep="-0.5">&minus;</button>'
              + '<span class="tval">' + (pp % 1 === 0 ? pp : pp.toFixed(1)) + '</span>'
@@ -1247,9 +1294,10 @@
   }
 
   function foodChip(f, selected) {
-    var on = selected.indexOf(f.n) >= 0;
-    return '<button class="tag'+(on?" on":"")+'" data-food="'+esc(f.n)+'" data-fname="'
-      + esc(fold(f.n))+'">'+esc(f.n)+'</button>';
+    var n = 0;
+    selected.forEach(function (k) { if (baseName(k) === f.n) n++; });
+    return '<button class="tag'+(n?" on":"")+'" data-food="'+esc(f.n)+'" data-fname="'
+      + esc(fold(f.n))+'">'+esc(f.n)+(n>1?' <span class="xn">\u00d7'+n+'</span>':'')+'</button>';
   }
 
   function tagBtn(t, list) {
@@ -1433,14 +1481,16 @@
       if (!e.f) return;
       var portion = null, mealId = null, touchedDay = false;
       names.forEach(function (nm) {
-        var ix = e.f.indexOf(nm);
-        if (ix < 0) return;
-        touchedDay = true;
-        if (portion == null) portion = (e.fa && e.fa[nm]) || 1;
-        if (mealId == null && e.m && e.m[nm] != null) mealId = e.m[nm];
-        e.f.splice(ix, 1);
-        if (e.fa) delete e.fa[nm];
-        if (e.m) delete e.m[nm];
+        slotsFor(e, nm).forEach(function (k) {
+          var ix = e.f.indexOf(k);
+          if (ix < 0) return;
+          touchedDay = true;
+          if (portion == null) portion = (e.fa && e.fa[k]) || 1;
+          if (mealId == null && e.m && e.m[k] != null) mealId = e.m[k];
+          e.f.splice(ix, 1);
+          if (e.fa) delete e.fa[k];
+          if (e.m) delete e.m[k];
+        });
       });
       if (!touchedDay) return;
       if (e.f.indexOf(canonical) < 0) e.f.push(canonical);
@@ -1590,7 +1640,8 @@
         var mine = g.foods.indexOf(nm4) >= 0;
         h += '<button class="btn' + (mine ? " go" : "") + '" data-setmeal="'
            + (g.solo ? "with:" + esc(others[0]) : g.id.slice(1)) + '">'
-           + (mine ? "\u2713 " : "") + (g.solo ? "With " + esc(others[0]) : "Meal " + (gi + 1) + " \u2014 " + esc(others.join(", ")))
+           + (mine ? "\u2713 " : "") + (g.solo ? "With " + esc(baseName(others[0]))
+                : "Meal " + (gi + 1) + " \u2014 " + esc(others.map(baseName).join(", ")))
            + '</button>';
       });
       var alone = !me.m || me.m[nm4] == null;
@@ -1816,8 +1867,11 @@
     draft.items.forEach(function (it) {
       (it.fl || []).forEach(function (f) { if (fl.indexOf(f) < 0) fl.push(f); });
     });
-    var extra = parseIngredients(draft.raw).flags;
-    extra.forEach(function (f) { if (fl.indexOf(f) < 0) fl.push(f); });
+    // only the whole-food judgements come from the full text; every ingredient group
+    // is derived per item, so per-item negation like "sockerfri" is respected
+    parseIngredients(draft.raw).flags.forEach(function (f) {
+      if ((f === "High sugar" || f === "Highly processed") && fl.indexOf(f) < 0) fl.push(f);
+    });
     draft.flags = fl;
   }
 
@@ -2718,8 +2772,10 @@
         Object.keys(state.days).forEach(function (dk) {
           var de3 = state.days[dk];
           if (!de3.f) return;
-          var ix5 = de3.f.indexOf(fp.n);
-          if (ix5 >= 0) { de3.f.splice(ix5,1); delete de3.fa[fp.n]; if (de3.m) delete de3.m[fp.n]; }
+          slotsFor(de3, fp.n).forEach(function (k) {
+            var ix5 = de3.f.indexOf(k);
+            if (ix5 >= 0) { de3.f.splice(ix5,1); delete de3.fa[k]; if (de3.m) delete de3.m[k]; }
+          });
         });
         (state.presets||[]).forEach(function (ps3) {
           if (!ps3.f) return;
@@ -2734,8 +2790,10 @@
         var de4 = state.days[dayK];
         if (!de4) return;
         if (!confirm('Erase "'+nameK+'" from '+longDate(dayK)+'? This cannot be undone.')) return;
-        var ix7 = (de4.f||[]).indexOf(nameK);
-        if (ix7 >= 0) { de4.f.splice(ix7,1); delete de4.fa[nameK]; if (de4.m) delete de4.m[nameK]; }
+        slotsFor(de4, nameK).forEach(function (k) {
+          var ix7 = de4.f.indexOf(k);
+          if (ix7 >= 0) { de4.f.splice(ix7,1); delete de4.fa[k]; if (de4.m) delete de4.m[k]; }
+        });
         for (var oz2 = (de4.oneoff||[]).length - 1; oz2 >= 0; oz2--) {
           if (de4.oneoff[oz2].n === nameK) de4.oneoff.splice(oz2, 1);
         }
@@ -2753,15 +2811,27 @@
       if (d.sev) { var e2 = entry(sel), v = +d.sev; e2.s = e2.s===v?null:v; save(); return render(); }
       if (d.zone) { var e6 = entry(sel), iz = e6.z.indexOf(d.zone);
         if (iz>=0) e6.z.splice(iz,1); else e6.z.push(d.zone); save(); return render(); }
-      if (d.food) { var e3 = entry(sel), i1 = e3.f.indexOf(d.food);
-        if (i1>=0) {
-          e3.f.splice(i1,1); delete e3.fa[d.food]; setMeal(e3, d.food, null);
+      if (d.food) {
+        var e3 = entry(sel), mine = slotsFor(e3, d.food);
+        if (mine.length) {
+          mine.forEach(function (k) {
+            var ix = e3.f.indexOf(k);
+            if (ix >= 0) e3.f.splice(ix, 1);
+            delete e3.fa[k]; setMeal(e3, k, null);
+          });
           for (var oz = (e3.oneoff||[]).length - 1; oz >= 0; oz--) {
             if (e3.oneoff[oz].n === d.food) e3.oneoff.splice(oz, 1);
           }
+        } else {
+          e3.f.push(d.food); e3.fa[d.food] = 1;
         }
-        else { e3.f.push(d.food); if (!e3.fa[d.food]) e3.fa[d.food] = 1; }
-        save(); return render(); }
+        save(); return render();
+      }
+      if (d.again) {
+        var e8 = entry(sel), k8 = freshSlot(e8, baseName(d.again));
+        e8.f.push(k8); e8.fa[k8] = 1;
+        save(); return render();
+      }
       if (d.foodsview) { foodsView = d.foodsview; return render(); }
       if (d.tidy) { tidySel[d.tidy] = !tidySel[d.tidy]; return render(); }
       if (d.tidyclear) { tidySel = {}; return render(); }
