@@ -337,7 +337,7 @@
     ["Whey / casein", /whey|vassle|casein|kasein|mjolkprotein|milk protein/],
     ["Egg", /\begg|\bagg\b|aggula|aggvita|albumen|aggpulver/],
     ["Soy", /\bsoy|\bsoja/],
-    ["Gluten / wheat", /wheat|vete|durum|gluten|barley|\bkorn\b|kornmalt|kornmjol|korngryn|\brye\b|\brag\b|ragmjol|ragsikt|ragkross|ragflingor|fullkornsrag|rugbrod|brod\b|bulle|fralla|baguette|croissant|croussaint|ciabatta|toast|limpa|pannkak|vafflor|kex\b|pasta\b|nudlar|couscous|bulgur|semolina|spelt|dinkel|mannagryn/],
+    ["Gluten / wheat", /wheat|vete|durum|gluten|barley|\bkorn\b|kornmalt|kornmjol|korngryn|\brye\b|\brag\b|ragmjol|ragsikt|ragkross|ragflingor|fullkornsrag|rugbrod|brod\b|bulle|fralla|baguette|croissant|croussaint|ciabatta|toast|limpa|pannkak|vafflor|kex\b|pasta\b|\bnudlar\b|aggnudlar|vetenudlar|couscous|bulgur|semolina|spelt|dinkel|mannagryn/],
     ["Added sugar", /sugar|socker(?!kulor)|syrup|sirap|\bdextros|\bdextrose|fruktos|fructose|glukos|glucose|maltodextrin|honey|honung|molasses|melass|invertsocker|sucrose|maltose|agavesirap/],
     ["Artificial sweetener", /aspartam|sucralos|sukralos|acesulfam|saccharin|sackarin|stevia|steviol|sorbitol|xylitol|maltitol|erytritol|erythritol|sotningsmedel|sweetener/],
     ["Cocoa / chocolate", /cocoa|cacao|kakao|chocolate|choklad/],
@@ -357,8 +357,8 @@
     // Glycaemic index is a property of the food, not just "contains carbohydrate".
     // Refined flour, free sugars, potato and enzyme-treated oat drink are high;
     // bran, whole grain, sourdough, lentil pasta and brown rice are not (see LOW_GI).
-    ["High GI", /vetemjol|vitt brod|rostbrod|hamburgerbrod|skallat vetemjol|vitt ris|socker(?!kulor)|sirap|glukos|\bdextros|maltodextrin|honung|potatis|majsstarkelse|modifierad starkelse|havredryck|instantiserade havregryn|havrepuffar|kornmalt|malt av korn|cornflakes|puffat ris|rostat ris/],
-    ["Fruit / veg", /tomat|tomato|apple|appel|apelsin|banan|berr|\bbar\b|jordgubb|hallon|bl[a\u00e5]bar|lingon|vindruv|melon|ananas|persika|plommon|\bkiwi\b|paron|carrot|morot|spinach|spenat|broccoli|orange|mango|lentil|linser|\bbeans?\b|bonor|boner|\barter\b|paprika|zucchini|aubergin|gurka|\bsallad|gronsak|avokado|avocado|\blok\b|purjolok|graslok|rodlok|schalottenlok|groddar|sprouts|rattika|\bkal\b|rabarber|champinjon|\bsvamp|lettuce|cucumber|onion|mushroom|vegetable/]
+    ["High GI", /vetemjol|vitt brod|rostbrod|hamburgerbrod|skallat vetemjol|vitt ris|socker(?!kulor)|sirap|glukos|\bdextros|maltodextrin|honung|potatis|majsstarkelse|modifierad starkelse|havredryck|instantiserade havregryn|havrepuffar|kornmalt|malt av korn|cornflakes|puffat ris|rostat ris|risnudlar|rice noodles/],
+    ["Fruit / veg", /tomat|tomato|apple|appel|apelsin|banan|berr|\bbar\b|jordgubb|hallon|bl[a\u00e5]bar|bjornbar|krusbar|vinbar|smultron|hjortron|tranbar|lingon|vindruv|melon|ananas|persika|plommon|\bkiwi\b|paron|carrot|morot|spinach|spenat|broccoli|orange|mango|lentil|linser|\bbeans?\b|bonor|boner|\barter\b|paprika|zucchini|aubergin|gurka|\bsallad|gronsak|avokado|avocado|\blok\b|purjolok|graslok|rodlok|schalottenlok|groddar|sprouts|rattika|\bkal\b|rabarber|champinjon|\bsvamp|lettuce|cucumber|onion|mushroom|vegetable/]
   ];
 
   var UNITS = [["g","g"],["ml","ml"],["piece","pcs"]];
@@ -1084,7 +1084,8 @@
     return h;
   }
 
-  var carriedFrom = null, mealTarget = null;
+  var carriedFrom = null, mealTarget = null, askState = {};
+  function ask(purpose, opts) { askState = opts || {}; askState.purpose = purpose; openSheet("ask"); }
 
   // a "save for tomorrow" drops itself onto the next day you open, once
   function maybeCarry() {
@@ -1384,10 +1385,8 @@
   function promptMerge(names) {
     // default to the shortest name — usually the cleanest version
     var suggested = names.slice().sort(function (a, b) { return a.length - b.length; })[0];
-    var canonical = prompt("Merge these into one food:\n\n  " + names.join("\n  ")
-      + "\n\nName it:", suggested);
-    if (!canonical || !canonical.trim()) return;
-    canonical = canonical.trim();
+    return ask("merge", { title:"Merge into one food", sub: names.join("  \u00b7  "),
+      value: suggested, arg: names, ok:"Merge" });
     mergeOneOffs(names, canonical);
     // drop straight into the editor so the ingredients can go in once
     var made = null;
@@ -1647,6 +1646,24 @@
       var alone = !me.m || me.m[nm4] == null;
       h += '<button class="btn' + (alone ? " go" : "") + '" data-setmeal="alone">'
         + (alone ? "\u2713 " : "") + 'On its own</button>'
+        + '<button class="btn" data-close="1">Cancel</button>';
+    } else if (stage === "restore") {
+      h += '<h2 class="sec">Restore from backup</h2>'
+        + '<div class="sub">Pick the .json file, or paste its contents. This replaces '
+        + '<b>everything</b> currently in the app.</div>'
+        + '<input type="file" accept=".json,application/json" id="restorefile" style="display:none">'
+        + '<button class="btn" data-pickfile="1">Choose a backup file</button>'
+        + '<div class="grph" style="margin-top:16px">or paste it</div>'
+        + '<textarea id="restoretext" placeholder="Paste the backup here" style="min-height:120px"></textarea>'
+        + '<div id="restorestatus" class="ocr"></div>'
+        + '<button class="btn go" data-dorestore="1">Restore</button>'
+        + '<button class="btn" data-close="1">Cancel</button>';
+    } else if (stage === "ask") {
+      h += '<h2 class="sec">' + esc(askState.title || "") + '</h2>'
+        + (askState.sub ? '<div class="sub">' + esc(askState.sub) + '</div>' : '')
+        + '<input type="text" id="askinput" value="' + esc(askState.value || "") + '" placeholder="'
+        + esc(askState.placeholder || "") + '">'
+        + '<button class="btn go" data-askok="1">' + esc(askState.ok || "Save") + '</button>'
         + '<button class="btn" data-close="1">Cancel</button>';
     } else if (stage === "presets") {
       h += '<h2 class="sec">Presets</h2>'
@@ -2416,7 +2433,7 @@
     h += '<div class="grp"><div class="grph">Backup</div>'
        + '<button class="btn go" data-share="1">Save a backup</button>'
        + '<button class="btn" data-copy="1">Copy as CSV</button>'
-       + '<button class="btn" data-restore="1">Restore from backup</button>'
+       + '<button class="btn" data-restorebackup="1">Restore from backup</button>'
        + '<div class="rowmeta" style="margin-top:10px">'
        + (db === null ? "Never backed up." : db === 0 ? "Backed up today." : "Last backup "+db+" day"+(db===1?"":"s")+" ago.")
        + ' Your log lives only on this phone — send a backup to Files or Notes every couple of weeks.'
@@ -2466,7 +2483,7 @@
     var ta = document.createElement("textarea");
     ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
     document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
-    try { document.execCommand("copy"); done(); } catch (e) { prompt("Copy this:", text); }
+    try { document.execCommand("copy"); done(); } catch (e) { ta.style.opacity = "1"; }
     document.body.removeChild(ta);
   }
 
@@ -2528,8 +2545,9 @@
       if (d.rentag) {
         var oldT = state.custom[+d.rentag];
         if (!oldT) return;
-        var newT = prompt("Rename this tag:", oldT);
-        if (!newT || !newT.trim()) return;
+        return ask("rentag", { title:"Rename tag", value:oldT, arg:+d.rentag, ok:"Rename" });
+        var newT = "";
+        if (!newT) return;
         newT = newT.trim();
         if (newT === oldT) return;
         if (state.custom.indexOf(newT) >= 0) { alert("You already have a tag called that."); return; }
@@ -2591,8 +2609,11 @@
         if (!cur || ((!cur.t || !cur.t.length) && (!cur.f || !cur.f.length))) {
           alert("Nothing selected on this day to save."); return;
         }
-        var nm3 = prompt("Name this preset — e.g. usual weekday");
-        if (!nm3 || !nm3.trim()) return;
+        return ask("preset", { title:"Save this day as a preset",
+          sub:"A set of foods and tags you can drop onto any day.",
+          placeholder:"e.g. usual weekday", ok:"Save preset" });
+        var nm3 = "";
+        if (!nm3) return;
         var fa2 = {};
         (cur.f || []).forEach(function (x) { fa2[x] = (cur.fa && cur.fa[x]) || 1; });
         state.presets.push({ n: nm3.trim(), t: (cur.t||[]).slice(), f: (cur.f||[]).slice(), fa: fa2,
@@ -2876,8 +2897,10 @@
       }
       if (d.tag) { var e4 = entry(sel), i2 = e4.t.indexOf(d.tag);
         if (i2>=0) e4.t.splice(i2,1); else e4.t.push(d.tag); save(); return render(); }
-      if (d.add) {
-        var nm2 = prompt("Name it — food, habit, product, anything:");
+      if (d.add) return ask("addtag", { title:"Add your own tag",
+        sub:"Food, habit, product — anything you want to track.", placeholder:"e.g. Sauna", ok:"Add" });
+      if (false) {
+        var nm2 = "";
         if (nm2 && nm2.trim()) {
           nm2 = nm2.trim();
           if (state.custom.indexOf(nm2)<0) state.custom.push(nm2);
@@ -2887,7 +2910,10 @@
         return;
       }
       if (d.reader) {
-        var url = prompt("Paste your reader endpoint URL. Leave blank to go back to on-device reading.", state.reader || "");
+        return ask("reader", { title:"Label reader",
+          sub:"Paste your endpoint URL. Leave blank to go back to on-device reading.",
+          value: state.reader || "", placeholder:"https://…", ok:"Save" });
+        var url = "";
         if (url === null) return;
         url = url.trim();
         if (url && !/^https:\/\//.test(url)) { alert("That needs to be an https:// URL."); return; }
@@ -2896,21 +2922,108 @@
       if (d.share) return shareBackup();
       if (d.copy) return copyOut(csv(), t, "Copy as CSV");
       if (d.backup) return copyOut(JSON.stringify(state), t, "Copy backup (JSON)");
-      if (d.restore) {
-        var raw = prompt("Paste a JSON backup. This replaces everything currently in the app.");
-        if (!raw) return;
-        try {
-          var v = JSON.parse(raw);
-          if (!v || typeof v !== "object" || !v.days) throw new Error("shape");
-          state.days = v.days || {}; state.custom = v.custom || []; state.foods = v.foods || [];
-          state.routine = v.routine || { am:"", pm:"", notes:"" };
-          state.backedUp = v.backedUp || null;
-          state.reader = v.reader || "";
-          state.presets = v.presets || [];
-          state.carry = v.carry || null;
-          save(); render();
-        } catch (e) { alert("That didn't look like a backup from this app. Nothing was changed."); }
+      if (d.restorebackup) return openSheet("restore");
+      if (d.pickfile) {
+        var fi = document.getElementById("restorefile");
+        if (!fi) return;
+        fi.onchange = function () {
+          var file = fi.files && fi.files[0];
+          if (!file) return;
+          var rd = new FileReader();
+          rd.onload = function () {
+            var ta = document.getElementById("restoretext");
+            if (ta) ta.value = rd.result;
+            var st = document.getElementById("restorestatus");
+            if (st) st.textContent = "Loaded " + file.name + " (" + Math.round(file.size/1024) + " KB). Now tap Restore.";
+          };
+          rd.onerror = function () {
+            var st = document.getElementById("restorestatus");
+            if (st) st.textContent = "Could not read that file.";
+          };
+          rd.readAsText(file);
+        };
+        fi.click();
         return;
+      }
+      if (d.dorestore) {
+        var ta2 = document.getElementById("restoretext");
+        var st2 = document.getElementById("restorestatus");
+        var raw2 = ta2 ? ta2.value.trim() : "";
+        if (!raw2) { if (st2) st2.textContent = "Nothing to restore \u2014 choose a file or paste the backup."; return; }
+        var vv;
+        try { vv = JSON.parse(raw2); }
+        catch (e) { if (st2) st2.textContent = "That is not valid JSON. Make sure you copied the whole file."; return; }
+        if (!vv || typeof vv !== "object" || !vv.days) {
+          if (st2) st2.textContent = "That does not look like a Skin Log backup \u2014 no days in it."; return; }
+        state.days = vv.days || {};
+        state.custom = vv.custom || [];
+        state.foods = vv.foods || [];
+        state.presets = vv.presets || [];
+        state.routine = vv.routine || { am:"", pm:"", notes:"" };
+        state.backedUp = vv.backedUp || null;
+        state.reader = vv.reader || "";
+        state.carry = vv.carry || null;
+        sel = todayStr(); sheet = null;
+        saveNow(); return render();
+      }
+      if (d.askok) {
+        var el2 = document.getElementById("askinput");
+        var val = el2 ? el2.value.trim() : "";
+        var purpose = askState.purpose, arg = askState.arg;
+        sheet = null;
+        if (!val && purpose !== "reader") return render();
+        if (purpose === "addtag") {
+          if (state.custom.indexOf(val) < 0) state.custom.push(val);
+          var ea = entry(sel);
+          if (ea.t.indexOf(val) < 0) ea.t.push(val);
+          save(); return render();
+        }
+        if (purpose === "preset") {
+          var cp = peek(sel), fap = {};
+          (cp.f || []).forEach(function (x) { fap[x] = (cp.fa && cp.fa[x]) || 1; });
+          state.presets.push({ n: val, t: (cp.t||[]).slice(), f: (cp.f||[]).slice(), fa: fap,
+                               m: JSON.parse(JSON.stringify(cp.m || {})),
+                               oneoff: JSON.parse(JSON.stringify(cp.oneoff || [])) });
+          save(); return render();
+        }
+        if (purpose === "rentag") {
+          var oT = state.custom[arg];
+          if (!oT || val === oT) return render();
+          if (state.custom.indexOf(val) >= 0) { alert("You already have a tag called that."); return render(); }
+          state.custom[arg] = val;
+          Object.keys(state.days).forEach(function (dd) {
+            var de = state.days[dd];
+            if (!de.t) return;
+            var ix = de.t.indexOf(oT);
+            if (ix >= 0) de.t[ix] = val;
+          });
+          (state.presets || []).forEach(function (ps) {
+            if (!ps.t) return;
+            var ix2 = ps.t.indexOf(oT);
+            if (ix2 >= 0) ps.t[ix2] = val;
+          });
+          save(); return openSheet("tags");
+        }
+        if (purpose === "merge") {
+          mergeOneOffs(arg, val);
+          var made = null;
+          state.foods.forEach(function (ff) { if (ff.n === val) made = ff; });
+          if (made) {
+            draft = { name: made.n, flags:(made.fl||[]).slice(), ingredients:(made.ing||[]).slice(),
+                      items:(made.items||[]).map(function(it){return {n:it.n,p:it.p,est:it.est,fl:(it.fl||[]).slice()};}),
+                      raw: made.raw||"", rawFull: made.rawFull||"", sz: made.sz==null?null:made.sz,
+                      u: made.u||"g", cat: catOf(made), catTouched:true, barcode: made.barcode||"",
+                      labelPhoto:"", dbState:"", fromDB:false, once:false, editing: made.n, editingOnce:null };
+            foodsView = "active";
+            return openSheet("food", draft);
+          }
+          return render();
+        }
+        if (purpose === "reader") {
+          if (val && !/^https:\/\//.test(val)) { alert("That needs to be an https:// URL."); return render(); }
+          state.reader = val; save(); return render();
+        }
+        return render();
       }
     };
     var n = document.getElementById("notes");
