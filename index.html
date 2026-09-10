@@ -171,6 +171,14 @@
     border-radius: 5px; border: 1px solid var(--line); color: var(--paper-dim); margin-right: 7px; }
   .kind.ing { border-color: var(--mark); color: var(--mark); }
 
+  .trend { width: 100%; height: 190px; display: block; margin: 4px 0 2px; }
+  .legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; color: var(--paper-dim); }
+  .key { width: 14px; height: 3px; border-radius: 2px; display: inline-block; margin-left: 8px; }
+  .key:first-child { margin-left: 0; }
+  .key.spots { background: var(--flare); }
+  .key.ov { background: var(--calm); }
+  .key.laser { background: var(--mark); height: 10px; width: 2px; }
   .lwrap { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin: 6px 0 8px; }
   .lcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .lbar { width: 100%; background: var(--ink-3); border-radius: 3px 3px 0 0; min-height: 2px; }
@@ -194,6 +202,7 @@
     padding: 4px 0 2px; }
   .mealcard.solo .mealh { color: var(--faint); }
   .mealg { color: var(--mark); }
+  button.pamt.del { color: var(--flare); }
   button.pamt { background: none; border: 0; padding: 2px 0 0; text-align: left; cursor: pointer;
     display: block; font-size: 11px; color: var(--faint);
     font-family: ui-monospace, "SF Mono", Menlo, monospace; text-decoration: underline; }
@@ -297,7 +306,7 @@
   var KEY = "skinlog:v2";
   var state = { days: {}, custom: [], foods: [], presets: [], carry: null, routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
   var view = "today", foodsView = "active", tidySel = {}, sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
-      sheet = null, saveTimer = null, calMonth = null;
+      sheet = null, saveTimer = null, calMonth = null, trendGroup = null;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
   var store = {
@@ -1238,6 +1247,7 @@
              + '<span class="pactions">'
              + '<button class="pamt" data-movefood="' + esc(nm) + '">' + esc(amt) + '</button>'
              + '<button class="pamt" data-again="' + esc(nm) + '">again +</button>'
+             + '<button class="pamt del" data-removeslot="' + esc(nm) + '">remove</button>' 
              + (once ? '<button class="pamt" data-editonce="' + esc(baseName(nm)) + '">edit</button>' : '')
              + '</span></span>'
              + '<button class="mini" data-portion="' + esc(nm) + '" data-pstep="-0.5">&minus;</button>'
@@ -1279,7 +1289,15 @@
     if (e) h += '<button class="btn danger" data-resetday="1">Reset this day</button><div style="height:8px"></div>';
     return h+'</div>';
   }
-  var foodQuery = "";
+  var foodQuery = "", foodsQuery = "";
+  function filterFoodRows() {
+    var needle = fold(foodsQuery).trim();
+    var rows = document.querySelectorAll("[data-fname2]");
+    for (var i = 0; i < rows.length; i++) {
+      var hit = !needle || rows[i].getAttribute("data-fname2").indexOf(needle) >= 0;
+      rows[i].style.display = hit ? "" : "none";
+    }
+  }
   function filterFoods() {
     var needle = fold(foodQuery).trim();
     var chips = document.querySelectorAll("[data-fname]");
@@ -1321,6 +1339,8 @@
        + '</div>';
 
     if (foodsView === "tidy") return h + tidyHTML() + '</div>';
+    if (state.foods.length > 8)
+      h += '<input type="text" id="fsearch2" class="fq" placeholder="Search your foods…" autocomplete="off">';
 
     if (foodsView === "active") {
       h += '<div class="sub">Add a product once. Its ingredients get pooled into groups you can '
@@ -1510,7 +1530,7 @@
   }
 
   function foodRow(f, i, used, isRetired, showErase) {
-    return '<div class="row'+(isRetired?" dim":"")+'"><div><div class="rowname">'+esc(f.n)
+    return '<div class="row'+(isRetired?" dim":"")+'" data-fname2="'+esc(fold(f.n))+'"><div><div class="rowname">'+esc(f.n)
       + (f.sz ? ' <span class="kind">'+f.sz+' '+(f.u==="piece"?"pcs":f.u)+'</span>' : '')
       + (isRetired ? ' <span class="kind">retired</span>' : '')+'</div>'
       + '<div class="rowmeta">'+(used ? 'on '+used+' day'+(used===1?'':'s') : 'never logged')
@@ -2278,9 +2298,9 @@
     MEASURES.forEach(function (m) {
       h += '<button class="chip'+(m[0]===measure?" on":"")+'" data-measure="'+m[0]+'">'+m[1]+'</button>';
     });
-    h += '</div><div class="chips">';
-    [0,1,2,3].forEach(function (l) {
-      h += '<button class="chip'+(l===lag?" on":"")+'" data-lag="'+l+'">'+(l===0?"Same day":l+"d before")+'</button>';
+    h += '</div><div class="chips lagchips">';
+    [0,1,2,3,4,5,6,7].forEach(function (l) {
+      h += '<button class="chip'+(l===lag?" on":"")+'" data-lag="'+l+'">'+(l===0?"same":l+"d")+'</button>';
     });
     h += '</div><div class="chips">'
        + '<button class="chip'+(mode==="presence"?" on":"")+'" data-mode="presence">Ate it or not</button>'
@@ -2292,7 +2312,7 @@
               + 'one sitting</b> rather than the daily total. Two days can carry the same total and very '
               + 'different peaks \u2014 that difference is what drives a glycaemic or insulin response.</div>'
             : '')
-       + laserPanel();
+       + trendChart() + laserPanel();
 
     var res = analyse(lag, measure);
     if (!res.length) {
@@ -2319,6 +2339,85 @@
       });
     }
     return h+'</div>';
+  }
+
+  // ---- trend chart: spots over time, with an optional group overlaid
+  function trendChart() {
+    var ks = Object.keys(state.days).sort();
+    if (ks.length < 5) return "";
+    if (ks.length > 60) ks = ks.slice(-60);
+
+    var spots = ks.map(function (k) { return metric(state.days[k], measure); });
+    var overlay = null, oname = "";
+    if (trendGroup) {
+      oname = trendGroup;
+      overlay = ks.map(function (k) { return dose(state.days[k], trendGroup); });
+    }
+
+    var W = 700, H = 200, PL = 34, PR = 10, PT = 14, PB = 26;
+    var iw = W - PL - PR, ih = H - PT - PB;
+    var sMax = Math.max(3, Math.max.apply(null, spots.map(function (v) { return v == null ? 0 : v; })));
+    var oMax = overlay ? Math.max(1, Math.max.apply(null, overlay)) : 1;
+    var x = function (i) { return PL + (ks.length < 2 ? 0 : i * iw / (ks.length - 1)); };
+    var ys = function (v) { return PT + ih - (v / sMax) * ih; };
+    var yo = function (v) { return PT + ih - (v / oMax) * ih; };
+
+    var h = '<div class="grp"><div class="grph">Trend</div>'
+      + '<svg class="trend" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+
+    // horizontal guides
+    for (var g = 0; g <= 2; g++) {
+      var gy = PT + ih - (g / 2) * ih;
+      h += '<line x1="' + PL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + gy.toFixed(1)
+        + '" stroke="#262E52" stroke-width="1"/>'
+        + '<text x="4" y="' + (gy + 4).toFixed(1) + '" fill="#5B639A" font-size="11">'
+        + Math.round(sMax * g / 2) + '</text>';
+    }
+    // laser markers
+    ks.forEach(function (k, i) {
+      if ((state.days[k].t || []).indexOf(LASER) >= 0)
+        h += '<line x1="' + x(i).toFixed(1) + '" y1="' + PT + '" x2="' + x(i).toFixed(1)
+          + '" y2="' + (PT + ih) + '" stroke="#E8B84B" stroke-width="1.5" stroke-dasharray="3 3"/>';
+    });
+    // overlay area first, so the spot line sits on top
+    if (overlay) {
+      var op = overlay.map(function (v, i) { return x(i).toFixed(1) + "," + yo(v).toFixed(1); }).join(" ");
+      h += '<polyline points="' + op + '" fill="none" stroke="#4FBFA8" stroke-width="2" opacity=".75"/>';
+    }
+    var sp = [], seg = [];
+    spots.forEach(function (v, i) {
+      if (v == null) { if (seg.length) sp.push(seg); seg = []; return; }
+      seg.push(x(i).toFixed(1) + "," + ys(v).toFixed(1));
+    });
+    if (seg.length) sp.push(seg);
+    sp.forEach(function (segment) {
+      h += '<polyline points="' + segment.join(" ") + '" fill="none" stroke="#E4737E" stroke-width="2.5"/>';
+    });
+    spots.forEach(function (v, i) {
+      if (v == null || v === 0) return;
+      h += '<circle cx="' + x(i).toFixed(1) + '" cy="' + ys(v).toFixed(1) + '" r="3" fill="#E4737E"/>';
+    });
+    // date ends
+    h += '<text x="' + PL + '" y="' + (H - 6) + '" fill="#5B639A" font-size="11">'
+      + parseD(ks[0]).toLocaleDateString(undefined, { day: "numeric", month: "short" }) + '</text>'
+      + '<text x="' + (W - PR) + '" y="' + (H - 6) + '" text-anchor="end" fill="#5B639A" font-size="11">'
+      + parseD(ks[ks.length - 1]).toLocaleDateString(undefined, { day: "numeric", month: "short" }) + '</text>'
+      + '</svg>';
+
+    h += '<div class="legend"><span class="key spots"></span>'
+      + esc(MEASURES.filter(function (m) { return m[0] === measure; })[0][1])
+      + (overlay ? '<span class="key ov"></span>' + esc(oname) + ' (0\u2013' + Math.round(oMax) + ' g)' : '')
+      + (ks.some(function (k) { return (state.days[k].t || []).indexOf(LASER) >= 0; })
+          ? '<span class="key laser"></span>laser' : '')
+      + '</div>';
+
+    h += '<div class="chips" style="margin-top:8px">'
+      + '<button class="chip' + (trendGroup ? "" : " on") + '" data-trend="">No overlay</button>';
+    ["Dairy","High GI","Whey / casein","Added sugar","Gluten / wheat"].forEach(function (t) {
+      h += '<button class="chip' + (trendGroup === t ? " on" : "") + '" data-trend="' + esc(t) + '">'
+        + esc(t.split(" ")[0]) + '</button>';
+    });
+    return h + '</div></div>';
   }
 
   function laserPanel() {
@@ -2826,6 +2925,7 @@
       if (d.lag === "0") { lag = 0; return render(); }
       if (d.measure) { measure = d.measure; return render(); }
       if (d.mode) { mode = d.mode; return render(); }
+      if (d.trend != null) { trendGroup = d.trend || null; return render(); }
       if (d.type) { var e1 = entry(sel);
         e1.k[d.type] = Math.max(0,(e1.k[d.type]||0)+(+d.step)); save(); return render(); }
       if (d.new) { var en = entry(sel); en.nw = Math.max(0,(en.nw||0)+(+d.new)); save(); return render(); }
@@ -2845,6 +2945,21 @@
           }
         } else {
           e3.f.push(d.food); e3.fa[d.food] = 1;
+        }
+        save(); return render();
+      }
+      if (d.removeslot) {
+        var er = entry(sel), ixr = er.f.indexOf(d.removeslot);
+        if (ixr >= 0) {
+          er.f.splice(ixr, 1);
+          delete er.fa[d.removeslot];
+          setMeal(er, d.removeslot, null);
+          var bn = baseName(d.removeslot);
+          if (!slotsFor(er, bn).length) {
+            for (var oz3 = (er.oneoff || []).length - 1; oz3 >= 0; oz3--) {
+              if (er.oneoff[oz3].n === bn) er.oneoff.splice(oz3, 1);
+            }
+          }
         }
         save(); return render();
       }
@@ -3064,6 +3179,12 @@
       };
     }
 
+    var q2 = document.getElementById("fsearch2");
+    if (q2) {
+      q2.value = foodsQuery;
+      q2.oninput = function () { foodsQuery = q2.value; filterFoodRows(); };
+      if (foodsQuery) filterFoodRows();
+    }
     var q = document.getElementById("fq");
     if (q) {
       q.value = foodQuery;
