@@ -342,7 +342,7 @@
     ["Artificial sweetener", /aspartam|sucralos|sukralos|acesulfam|saccharin|sackarin|stevia|steviol|sorbitol|xylitol|maltitol|erytritol|erythritol|sotningsmedel|sweetener/],
     ["Cocoa / chocolate", /cocoa|cacao|kakao|chocolate|choklad/],
     ["Nuts", /almond|mandel|hazelnut|hasselnot|peanut|jordnot|cashew|walnut|valnot|pistachio|pistage|pecan|pekan|\bnuts\b|\bnotter\b|nougat/],
-    ["Seed oils", /sunflower oil|solrosolja|rapeseed|rapsolja|canola|soybean oil|sojaolja|corn oil|majsolja|safflower|seed oil|vegetabilisk olja|vegetable oil/],
+    ["Seed oils", /sunflower oil|solrosolja|rapeseed|rapsolja|canola|soybean oil|sojaolja|corn oil|majsolja|safflower|seed oil|vegetabilisk olja|vegetable oil|vaxtolja|vaxtoljor|\braps\b|\bsolros\b|margarin/],
     ["Palm oil", /palm oil|palmolja|palm fat|palmfett|palm kernel|palmkarn/],
     ["Fried / high fat", /\bfried|friterad|\bstekt\b|shortening|panerad/],
     ["Caffeine", /caffeine|koffein|coffee|\bkaffe|guarana|green tea extract|teextrakt|matcha|gront te|green tea|\bte\b|espresso|cappuccino|energidryck/],
@@ -357,7 +357,7 @@
     // Glycaemic index is a property of the food, not just "contains carbohydrate".
     // Refined flour, free sugars, potato and enzyme-treated oat drink are high;
     // bran, whole grain, sourdough, lentil pasta and brown rice are not (see LOW_GI).
-    ["High GI", /vetemjol|vitt brod|rostbrod|hamburgerbrod|skallat vetemjol|vitt ris|socker(?!kulor)|sirap|glukos|\bdextros|maltodextrin|honung|potatis|majsstarkelse|modifierad starkelse|havredryck|instantiserade havregryn|havrepuffar|kornmalt|malt av korn|cornflakes|puffat ris|rostat ris|risnudlar|rice noodles/],
+    ["High GI", /vetemjol|vitt brod|rostbrod|hamburgerbrod|skallat vetemjol|vitt ris|socker(?!kulor)|sirap|glukos|\bdextros|maltodextrin|honung|potatis|starkelse|modifierad starkelse|havredryck|instantiserade havregryn|havrepuffar|kornmalt|malt av korn|cornflakes|puffat ris|rostat ris|risnudlar|rice noodles/],
     ["Fruit / veg", /tomat|tomato|apple|appel|apelsin|banan|berr|\bbar\b|jordgubb|hallon|bl[a\u00e5]bar|bjornbar|krusbar|vinbar|smultron|hjortron|tranbar|lingon|vindruv|melon|ananas|persika|plommon|\bkiwi\b|paron|carrot|morot|spinach|spenat|broccoli|orange|mango|lentil|linser|\bbeans?\b|bonor|boner|\barter\b|paprika|zucchini|aubergin|gurka|\bsallad|gronsak|avokado|avocado|\blok\b|purjolok|graslok|rodlok|schalottenlok|groddar|sprouts|rattika|\bkal\b|rabarber|champinjon|\bsvamp|lettuce|cucumber|onion|mushroom|vegetable/]
   ];
 
@@ -419,7 +419,7 @@
 
   // "sockerfri sirap" must not read as sugar just because it says sirap
   // these pull a food out of High GI even when a high-GI word is present
-  var LOW_GI = /fullkorn|gula linser|linspasta|\bkli\b|vetekli|ragmjol|\brag\b|surdeg|brunt ris|linfro|solrosfro|bonor|linser/;
+  var LOW_GI = /fullkorn|gula linser|linspasta|\bkli\b|vetekli|ragmjol|\brag\b|surdeg|brunt ris|linfro|solrosfro|bonor|linser|[a-z]+fiber|\bfiber\b/;
 
   var NO_GLUTEN = /glutenfri|gluten[\s-]?free|utan gluten/;
 
@@ -451,10 +451,10 @@
   function parseItemList(text) {
     var chunks = splitItems(String(text || "").replace(ING_PREFIX, ""));
     var items = chunks.map(function (c) {
-      var m = c.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%/);
+      var m = c.match(/(\d{1,3}(?:[.,]\d{1,4})?)\s*%/);
       var pct = m ? parseFloat(String(m[1]).replace(",", ".")) : null;
       if (pct !== null && (pct <= 0 || pct > 100)) pct = null;
-      var name = c.replace(/\s*\d{1,3}(?:[.,]\d{1,2})?\s*%\s*/, " ").replace(/\s{2,}/g, " ").trim();
+      var name = c.replace(/\s*\d{1,3}(?:[.,]\d{1,4})?\s*%\s*/, " ").replace(/\s{2,}/g, " ").trim();
       return { n: name || c.trim(), p: pct, est: false, fl: flagsFor(c) };
     });
 
