@@ -178,6 +178,8 @@
   .key:first-child { margin-left: 0; }
   .key.spots { background: var(--flare); }
   .key.ov { background: var(--calm); }
+  .scaleno { margin-left: 8px; opacity: .75; }
+  .trendchips .chip { min-width: 0; padding: 8px 6px; font-size: 10px; }
   .key.laser { background: var(--mark); height: 10px; width: 2px; }
   .lwrap { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin: 6px 0 8px; }
   .lcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -306,7 +308,7 @@
   var KEY = "skinlog:v2";
   var state = { days: {}, custom: [], foods: [], presets: [], carry: null, routine: { am:"", pm:"", notes:"" }, backedUp: null, reader: "" };
   var view = "today", foodsView = "active", tidySel = {}, sel = todayStr(), lag = 1, measure = "nw", mode = "presence",
-      sheet = null, saveTimer = null, calMonth = null, trendGroup = null;
+      sheet = null, saveTimer = null, calMonth = null, trendGroups = [], trendSum = false;
 
   // ---- storage: real filesystem-backed store inside Claude, localStorage on your own host
   var store = {
@@ -2341,31 +2343,38 @@
     return h+'</div>';
   }
 
-  // ---- trend chart: spots over time, with an optional group overlaid
+  // ---- trend chart: spots over time, with any number of groups overlaid
+  var TRENDCOLS = ["#4FBFA8","#E8B84B","#7FA6E8","#C88CE0","#E89A5B","#8FD46A"];
+  var TRENDABLE = ["Dairy","Added sugar","High GI","Whey / casein","Gluten / wheat",
+                   "Red meat","Seed oils","Caffeine","Artificial sweetener","Cocoa / chocolate"];
+
   function trendChart() {
     var ks = Object.keys(state.days).sort();
     if (ks.length < 5) return "";
     if (ks.length > 60) ks = ks.slice(-60);
 
     var spots = ks.map(function (k) { return metric(state.days[k], measure); });
-    var overlay = null, oname = "";
-    if (trendGroup) {
-      oname = trendGroup;
-      overlay = ks.map(function (k) { return dose(state.days[k], trendGroup); });
+    var series = trendGroups.map(function (t) {
+      return { name: t, v: ks.map(function (k) { return dose(state.days[k], t); }) };
+    });
+    if (trendSum && series.length > 1) {
+      var summed = ks.map(function (_, i) {
+        return series.reduce(function (a, s2) { return a + s2.v[i]; }, 0);
+      });
+      series = [{ name: "combined (" + trendGroups.length + " groups)", v: summed, sum: true }];
     }
 
     var W = 700, H = 200, PL = 34, PR = 10, PT = 14, PB = 26;
     var iw = W - PL - PR, ih = H - PT - PB;
     var sMax = Math.max(3, Math.max.apply(null, spots.map(function (v) { return v == null ? 0 : v; })));
-    var oMax = overlay ? Math.max(1, Math.max.apply(null, overlay)) : 1;
+    var oMax = 1;
+    series.forEach(function (s2) { oMax = Math.max(oMax, Math.max.apply(null, s2.v)); });
     var x = function (i) { return PL + (ks.length < 2 ? 0 : i * iw / (ks.length - 1)); };
     var ys = function (v) { return PT + ih - (v / sMax) * ih; };
     var yo = function (v) { return PT + ih - (v / oMax) * ih; };
 
     var h = '<div class="grp"><div class="grph">Trend</div>'
       + '<svg class="trend" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
-
-    // horizontal guides
     for (var g = 0; g <= 2; g++) {
       var gy = PT + ih - (g / 2) * ih;
       h += '<line x1="' + PL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + gy.toFixed(1)
@@ -2373,17 +2382,17 @@
         + '<text x="4" y="' + (gy + 4).toFixed(1) + '" fill="#5B639A" font-size="11">'
         + Math.round(sMax * g / 2) + '</text>';
     }
-    // laser markers
     ks.forEach(function (k, i) {
       if ((state.days[k].t || []).indexOf(LASER) >= 0)
         h += '<line x1="' + x(i).toFixed(1) + '" y1="' + PT + '" x2="' + x(i).toFixed(1)
-          + '" y2="' + (PT + ih) + '" stroke="#E8B84B" stroke-width="1.5" stroke-dasharray="3 3"/>';
+          + '" y2="' + (PT + ih) + '" stroke="#E8B84B" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>';
     });
-    // overlay area first, so the spot line sits on top
-    if (overlay) {
-      var op = overlay.map(function (v, i) { return x(i).toFixed(1) + "," + yo(v).toFixed(1); }).join(" ");
-      h += '<polyline points="' + op + '" fill="none" stroke="#4FBFA8" stroke-width="2" opacity=".75"/>';
-    }
+    series.forEach(function (s2, si) {
+      var col = s2.sum ? "#FFFFFF" : TRENDCOLS[si % TRENDCOLS.length];
+      var pts = s2.v.map(function (v, i) { return x(i).toFixed(1) + "," + yo(v).toFixed(1); }).join(" ");
+      h += '<polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="'
+        + (s2.sum ? 2.5 : 2) + '" opacity="' + (s2.sum ? ".9" : ".8") + '"/>';
+    });
     var sp = [], seg = [];
     spots.forEach(function (v, i) {
       if (v == null) { if (seg.length) sp.push(seg); seg = []; return; }
@@ -2397,7 +2406,6 @@
       if (v == null || v === 0) return;
       h += '<circle cx="' + x(i).toFixed(1) + '" cy="' + ys(v).toFixed(1) + '" r="3" fill="#E4737E"/>';
     });
-    // date ends
     h += '<text x="' + PL + '" y="' + (H - 6) + '" fill="#5B639A" font-size="11">'
       + parseD(ks[0]).toLocaleDateString(undefined, { day: "numeric", month: "short" }) + '</text>'
       + '<text x="' + (W - PR) + '" y="' + (H - 6) + '" text-anchor="end" fill="#5B639A" font-size="11">'
@@ -2405,19 +2413,30 @@
       + '</svg>';
 
     h += '<div class="legend"><span class="key spots"></span>'
-      + esc(MEASURES.filter(function (m) { return m[0] === measure; })[0][1])
-      + (overlay ? '<span class="key ov"></span>' + esc(oname) + ' (0\u2013' + Math.round(oMax) + ' g)' : '')
-      + (ks.some(function (k) { return (state.days[k].t || []).indexOf(LASER) >= 0; })
-          ? '<span class="key laser"></span>laser' : '')
-      + '</div>';
+      + esc(MEASURES.filter(function (m) { return m[0] === measure; })[0][1]);
+    series.forEach(function (s2, si) {
+      var col = s2.sum ? "#FFFFFF" : TRENDCOLS[si % TRENDCOLS.length];
+      h += '<span class="key" style="background:' + col + '"></span>' + esc(s2.name);
+    });
+    if (series.length) h += '<span class="scaleno">all groups 0\u2013' + Math.round(oMax) + ' g</span>';
+    h += '</div>';
 
-    h += '<div class="chips" style="margin-top:8px">'
-      + '<button class="chip' + (trendGroup ? "" : " on") + '" data-trend="">No overlay</button>';
-    ["Dairy","High GI","Whey / casein","Added sugar","Gluten / wheat"].forEach(function (t) {
-      h += '<button class="chip' + (trendGroup === t ? " on" : "") + '" data-trend="' + esc(t) + '">'
+    h += '<div class="chips trendchips">';
+    TRENDABLE.forEach(function (t, i) {
+      var on = trendGroups.indexOf(t) >= 0;
+      var col = on ? TRENDCOLS[trendGroups.indexOf(t) % TRENDCOLS.length] : "";
+      h += '<button class="chip' + (on ? " on" : "") + '" data-trend="' + esc(t) + '"'
+        + (on && !trendSum ? ' style="border-color:' + col + ';color:' + col + '"' : "") + '>'
         + esc(t.split(" ")[0]) + '</button>';
     });
-    return h + '</div></div>';
+    h += '</div>';
+    if (trendGroups.length > 1) {
+      h += '<div class="chips" style="margin-top:6px">'
+        + '<button class="chip' + (trendSum ? " on" : "") + '" data-trendsum="1">'
+        + (trendSum ? "\u2713 " : "") + 'Add them together</button>'
+        + '<button class="chip" data-trendclear="1">Clear all</button></div>';
+    }
+    return h + '</div>';
   }
 
   function laserPanel() {
@@ -2925,7 +2944,14 @@
       if (d.lag === "0") { lag = 0; return render(); }
       if (d.measure) { measure = d.measure; return render(); }
       if (d.mode) { mode = d.mode; return render(); }
-      if (d.trend != null) { trendGroup = d.trend || null; return render(); }
+      if (d.trend != null) {
+        var ti = trendGroups.indexOf(d.trend);
+        if (ti >= 0) trendGroups.splice(ti, 1); else trendGroups.push(d.trend);
+        if (trendGroups.length < 2) trendSum = false;
+        return render();
+      }
+      if (d.trendsum) { trendSum = !trendSum; return render(); }
+      if (d.trendclear) { trendGroups = []; trendSum = false; return render(); }
       if (d.type) { var e1 = entry(sel);
         e1.k[d.type] = Math.max(0,(e1.k[d.type]||0)+(+d.step)); save(); return render(); }
       if (d.new) { var en = entry(sel); en.nw = Math.max(0,(en.nw||0)+(+d.new)); save(); return render(); }
