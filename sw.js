@@ -1,4 +1,4 @@
-var CACHE = "skinlog-v45";
+var CACHE = "skinlog-v48";
 var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function (e) {
