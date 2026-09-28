@@ -347,7 +347,7 @@
     ["Dairy", /milk|mjolk|filmjolk|lactose|laktos|whey|vassle|casein|kasein|cream(?!\s*of\s*tartar)|gradde|creme fraiche|butter(?!nut)|\bsmor\b|cheese|\bost\b|\bostar\b|ostpulver|mozzarella|cheddar|parmesan|\bfeta\b|ricotta|halloumi|mascarpone|kvarg|kvark|kesella|yogh?urt|\bghee\b|\bskyr\b|kefir|prastost|herrgard|gouda|brie/],
     ["Whey / casein", /whey|vassle|casein|kasein|mjolkprotein|milk protein/],
     ["Egg", /\begg|\bagg\b|aggula|aggvita|albumen|aggpulver/],
-    ["Soy", /\bsoy|\bsoja/],
+    ["Soy", /\bsoy|\bsoja|\btofu\b/],
     ["Gluten / wheat", /wheat|vete|durum|gluten|barley|\bkorn\b|kornmalt|kornmjol|korngryn|\brye\b|\brag\b|ragmjol|ragsikt|ragkross|ragflingor|fullkornsrag|rugbrod|brod\b|bulle|fralla|baguette|croissant|croussaint|ciabatta|toast|limpa|pannkak|vafflor|kex\b|\bpasta|\bnudlar\b|aggnudlar|vetenudlar|couscous|bulgur|semolina|spelt|dinkel|mannagryn/],
     ["Added sugar", /sugar|socker(?!kulor)|syrup|sirap|\bdextros|\bdextrose|fruktos|fructose|glukos|glucose|maltodextrin|honey|honung|molasses|melass|invertsocker|sucrose|maltose|agavesirap|juice|must\b|fruktkoncentrat|saftkoncentrat|nektar/],
     ["Artificial sweetener", /aspartam|sucralos|sukralos|acesulfam|saccharin|sackarin|stevia|steviol|sorbitol|xylitol|maltitol|erytritol|erythritol|sotningsmedel|sweetener/],
@@ -358,11 +358,11 @@
     ["Fried / high fat", /\bfried|friterad|\bstekt\b|shortening|panerad/],
     ["Caffeine", /caffeine|koffein|coffee|\bkaffe|guarana|green tea extract|teextrakt|matcha|gront te|green tea|\bte\b|espresso|cappuccino|energidryck/],
     ["Alcohol", /ethanol|etanol|alkohol|\bwine\b|\bvin\b|\bbeer\b|whisky|vodka|\brum\b|likor|liqueur|appelvin|paronvin|\bcider\b|starkol|folkol|snaps|\bgin\b|tequila|prosecco|champagne/],
-    ["Iodine-rich", /seaweed|kelp|\bnori\b|\btang\b|alger|iodi[sz]ed|jodid|joderat|\bjod\b|jodberikad|jodtillsatt/],
+    ["Iodine-rich", /seaweed|kelp|\bnori\b|\btang\b|alger|iodi[sz]ed|iodide|jodid|joderat|\bjod\b|jodberikad|jodtillsatt/],
     ["Additives / preservatives", /\be\d{3}|preservative|konserveringsmedel|stabili[sz]|stabiliseringsmedel|emulsifier|emulgeringsmedel|fortjockningsmedel|fortjockning|flavou?ring|\barom|antioxidationsmedel|surhetsreglerande|smakforstarkare|anti-?caking|colou?r \(|fargamne|mjolbehandlingsmedel|behandlingsmedel|sulfit|svaveldioxid/],
     ["Spicy", /chill?i|cayenne|jalapeno|sriracha|harissa|capsic|\bstark\b/],
     ["Fermented", /fermented|fermenterad|kimchi|\bmiso\b|kefir|sourdough|surdeg|kombucha|syrningskultur|syrakultur|yoghurtkultur|jogurtkultur|bakteriekultur|levande kultur|filkultur|lactobacillus|acidophilus|bifido/],
-    ["Red meat", /\bbeef\b|notkott|\bpork\b|\bflask|\blamb\b|\blamm\b|bacon|\bham\b|skinka|salami|\bveal\b|\bkalv\b|mince|kottfars|notfars|blandfars|flaskfars|korv|oxfile|oxkott|oxstek|\box\b|entrecote|ryggbiff|hogrev|\bbiff|rostbiff|prosciutto|chorizo/],
+    ["Red meat", /\bbeef\b|notkott|\bpork\b|\bflask|\blamb\b|\blamm\b|bacon|\bham\b|skinka|salami|\bveal\b|\bkalv\b|mince|kottfars|notfars|blandfars|flaskfars|korv|oxfile|oxkott|oxstek|\box\b|entrecote|ryggbiff|hogrev|\bbiff|rostbiff|prosciutto|chorizo|\bsalsicc/],
     ["Fish / seafood", /salmon|\blax\b|tuna|tonfisk|\bcod\b|torsk|shrimp|prawn|\brak(?:or)?\b|\bfish\b|\bfisk|anchov|ansjovis|sardin|mackerel|makrill|\bsill\b/],
     ["Whole grain", /wholegrain|whole ?grain|wholemeal|fullkorn|\boats?\b|havre(?!fiber|kli)|brown rice|brunt ris|quinoa|bulgur/],
     // Glycaemic index is a property of the food, not just "contains carbohydrate".
@@ -440,6 +440,8 @@
 
   var NO_SUGAR = /sockerfri|osockrad|osotad|utan socker|utan tillsatt socker|sugar[\s-]?free|no added sugar|zero sugar/;
 
+  var SOUR_JUICE = /citronjuice|citronsaft|limejuice|tomatjuice|lemon juice|lime juice|tomato juice/;
+  var SOUR_JUICE_ALL = /citronjuice|citronsaft|limejuice|tomatjuice|lemon juice|lime juice|tomato juice/g;
   function flagsFor(text) {
     var t = fold(text), out = [];
     RULES.forEach(function (r) { if (r[1].test(t)) out.push(r[0]); });
@@ -457,6 +459,15 @@
     }
     if (NO_DAIRY.test(t)) {
       out = out.filter(function (f) { return f !== "Dairy" && f !== "Whey / casein"; });
+    }
+    // lemon, lime and tomato juice are acid or vegetable, not a sweetener: drop Added sugar
+    // when one of them was the only thing that tripped it
+    if (out.indexOf("Added sugar") >= 0 && SOUR_JUICE.test(t)) {
+      var rest = t.replace(SOUR_JUICE_ALL, " ");
+      var sugarRule = RULES.filter(function (r) { return r[0] === "Added sugar"; })[0];
+      if (sugarRule && !sugarRule[1].test(rest)) {
+        out = out.filter(function (f) { return f !== "Added sugar"; });
+      }
     }
     return out;
   }
@@ -2749,11 +2760,24 @@
         if (!ps2) return;
         var tg = entry(sel);
         (ps2.t || []).forEach(function (x) { if (tg.t.indexOf(x) < 0) tg.t.push(x); });
+        // every food in a preset is a fresh serving (a second whey on a day that already has one is
+        // still a second whey), and the preset's meals become new meals here rather than merging into
+        // whichever meal on this day happens to share the same number
+        var remap = {};
+        tg.m = tg.m || {};
         (ps2.f || []).forEach(function (x) {
-          if (tg.f.indexOf(x) < 0) tg.f.push(x);
-          if (tg.fa[x] == null) tg.fa[x] = (ps2.fa && ps2.fa[x]) || 1;
+          var slot = freshSlot(tg, baseName(x));
+          tg.f.push(slot);
+          tg.fa[slot] = (ps2.fa && ps2.fa[x]) || 1;
+          var mid = ps2.m ? ps2.m[x] : null;
+          if (mid != null) {
+            if (remap[mid] == null) remap[mid] = nextMealId(tg);
+            tg.m[slot] = remap[mid];
+          }
         });
-        if (ps2.m) { tg.m = tg.m || {}; for (var pk in ps2.m) if (tg.m[pk] == null) tg.m[pk] = ps2.m[pk]; }
+        var pcount = {};
+        for (var pk in tg.m) pcount[tg.m[pk]] = (pcount[tg.m[pk]] || 0) + 1;
+        for (var pk2 in tg.m) if (pcount[tg.m[pk2]] < 2) delete tg.m[pk2];
         (ps2.oneoff || []).forEach(function (f) {
           var dup = false;
           (tg.oneoff = tg.oneoff || []).forEach(function (x) { if (x.n === f.n) dup = true; });
