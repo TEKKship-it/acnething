@@ -625,6 +625,27 @@
 
   var NO_SUGAR = /sockerfri|osockrad|osotad|utan socker|utan tillsatt socker|sugar[\s-]?free|no added sugar|zero sugar/;
 
+  // words that only look like a group: chervil (körvel) is not sausage (korv), a hot-dog bun is not meat,
+  // wine vinegar is not wine, lactic acid (mjölksyra) and "mjölkfri" are not milk, and a rice protein
+  // isolate or rice syrup is not a whole grain. The group is dropped only when the look-alike was the
+  // only thing that tripped it, so "körvel, fläskkorv" still reads as red meat.
+  var LOOKALIKES = [
+    ["Red meat", /korvel|korvbrod\w*|korvkrydd\w*/g],
+    ["Alcohol", /(?:vinager|attika)\s*\(?\s*(?:av|fran|gjord pa)\s+(?:\w+\s+)?vin\b|\b(?:red |white )?wine vinegar|vinegar (?:of|from) wine/g],
+    ["Dairy", /mjolksyr\w*|mjolkfri\w*/g],
+    ["Whole grain", /(?:brown rice|brunt ris)\s*(?:protein|syrup|sirap)\w*/g]
+  ];
+  function dropLookalikes(t, out) {
+    LOOKALIKES.forEach(function (x) {
+      if (out.indexOf(x[0]) < 0) return;
+      var rest = t.replace(x[1], " ");
+      if (rest === t) return;
+      var rule = RULES.filter(function (r) { return r[0] === x[0]; })[0];
+      if (rule && !rule[1].test(rest)) out = out.filter(function (f) { return f !== x[0]; });
+    });
+    return out;
+  }
+
   var SOUR_JUICE = /citronjuice|citronsaft|limejuice|tomatjuice|lemon juice|lime juice|tomato juice/;
   var SOUR_JUICE_ALL = /citronjuice|citronsaft|limejuice|tomatjuice|lemon juice|lime juice|tomato juice/g;
   function flagsFor(text) {
@@ -654,7 +675,7 @@
         out = out.filter(function (f) { return f !== "Added sugar"; });
       }
     }
-    return out;
+    return dropLookalikes(t, out);
   }
 
   // build items with a percentage each: stated where printed, estimated otherwise
@@ -690,6 +711,7 @@
   function parseIngredients(text) {
     var flags = [], t = fold(text);
     RULES.forEach(function (r) { if (r[1].test(t)) flags.push(r[0]); });
+    flags = dropLookalikes(t, flags);
     // sugar early in the list = high sugar
     var parts = t.split(/[,;\n•·]+/).map(function (s) { return s.trim(); }).filter(Boolean);
     var firstThree = fold(parts.slice(0, 3).join(" "));
